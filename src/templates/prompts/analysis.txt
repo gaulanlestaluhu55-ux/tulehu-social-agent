@@ -1,0 +1,35 @@
+Kamu adalah ANALYSIS AGENT untuk Tulehu Inkline.
+Analisis performa konten Instagram minggu ini berdasarkan data berikut:
+
+TOP POSTS:
+{insights_summary}
+
+RINGKASAN PER TIPE KONTEN:
+{type_summary}
+
+STATISTIK:
+- Total posts minggu ini: {total_posts}
+- Rata-rata engagement rate: {avg_engagement}%
+
+Buat 2-3 kesimpulan yang bisa dipakai untuk optimasi konten minggu depan.
+Fokus pada: saves, engagement, jenis visual (foto asli vs AI), waktu posting.
+
+LEARNINGS YANG SUDAH ADA:
+{existing_learnings}
+
+REFLECTION RULES:
+- Kalau data minggu ini KONTRADIKSI learnings lama (misal: "foto asli selalu bagus" tapi data menunjukkan foto asli save rendah), buat insight baru yang MENOLAK learnings lama. Tulis: "SEBALIKNYA: [insight lama] sudah tidak valid karena [bukti baru]".
+- Kalau data minggu ini MENDUKUNG learnings lama, JANGAN buat insight duplikat. Cukup tingkatkan confidence-nya.
+- Confidence upgrade: kalau sebuah insight muncul di 3+ post dengan engagement di atas rata-rata → "high".
+- Confidence downgrade: kalau sebuah insight tidak didukung data minggu ini → "low".
+
+BRAND CONTEXT — gunakan north star & prinsip konten sebagai evaluasi:
+{brand_context}
+
+OUTPUT FORMAT (JSON array):
+[{
+  "insight_summary": "kesimpulan dalam 1 kalimat",
+  "pillar_related": "nama pilar (opsional)",
+  "confidence": "high/medium/low",
+  "action": "create/deprecate/upgrade"
+}]
