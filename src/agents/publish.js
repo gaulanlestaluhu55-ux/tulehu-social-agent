@@ -12,10 +12,13 @@ async function ensureBucket() {
   });
   const { buckets } = await res.json();
   const exists = buckets.some(b => b.name === 'instagram-assets');
-  if (exists) return;
+  if (exists) {
+    console.log('[Publish] Bucket instagram-assets sudah ada');
+    return;
+  }
 
   console.log('[Publish] Creating instagram-assets bucket...');
-  await fetch(listUrl, {
+  const createRes = await fetch(listUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY}`,
@@ -29,7 +32,8 @@ async function ensureBucket() {
       allowedMimeTypes: ['image/png', 'image/jpeg', 'image/jpg', 'video/mp4'],
     }),
   });
-  console.log('[Publish] Bucket created.');
+  const createData = await createRes.json();
+  console.log('[Publish] Bucket create result:', JSON.stringify(createData));
 }
 
 let bucketReady = false;
@@ -56,10 +60,13 @@ async function uploadToStorage(localPath) {
 
   if (!res.ok) {
     const err = await res.text();
+    console.error(`[Publish] Storage upload error: ${res.status} - ${err}`);
     throw new Error(`Storage upload failed (${res.status}): ${err}`);
   }
 
-  return storageUrl;
+  const publicUrl = `${config.SUPABASE_URL}/storage/v1/object/public/instagram-assets/${filename}`;
+  console.log(`[Publish] Uploaded to: ${publicUrl}`);
+  return publicUrl;
 }
 
 export async function runPublishAgent(pipeline) {
