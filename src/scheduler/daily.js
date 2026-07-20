@@ -147,6 +147,18 @@ async function runDailyPipeline(bot, date) {
       await handleAutoTimeout(bot, result.pipeline, mode, pillar);
     }, AUTO_TIMEOUT));
   }
+
+  if (result.status === PIPELINE_STATUS.AWAITING_FINAL_APPROVAL) {
+    const { finalApprovalTemplate } = await import('../telegram/templates.js');
+    const caption = result.pipeline.caption_content || result.captionResult?.caption || '';
+    await bot.api.sendMessage(config.TELEGRAM_OWNER_CHAT_ID,
+      `🖼 *Preview siap — ${escapeMarkdown(pillar.pillar_name)}*\n\n` +
+      (mode === 'semi_auto'
+        ? `Gue tunggu ${config.AUTO_CONFIRM_TIMEOUT_MINUTES} menit approval final. Kalo gak lo approve, gue publish otomatis.\n\n`
+        : `Review caption & gambar di bawah. Kalo udah oke, balas *approve*.\n\n`) +
+      finalApprovalTemplate(result.pipeline, caption)
+    );
+  }
 }
 
 /**
