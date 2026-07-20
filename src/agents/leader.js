@@ -314,7 +314,12 @@ export async function handleApprove(ctx, today) {
       } else if (result.status === PIPELINE_STATUS.AWAITING_FINAL_APPROVAL) {
         const caption = result.captionResult?.caption || result.pipeline.caption_content;
         if (result.imageResult?.filepath) {
-          await ctx.replyWithPhoto({ source: result.imageResult.filepath });
+          try {
+            const imageBuffer = fs.readFileSync(result.imageResult.filepath);
+            await ctx.replyWithPhoto({ source: imageBuffer, filename: path.basename(result.imageResult.filepath) });
+          } catch (e) {
+            console.warn('[Pipeline] Gagal kirim preview foto:', e.message);
+          }
         }
         await ctx.reply(templates.finalApprovalTemplate(result.pipeline, caption), { parse_mode: 'Markdown' });
       }
@@ -374,7 +379,12 @@ export async function handleRevise(ctx, today, note) {
       await updatePipelineStatus(today.id, PIPELINE_STATUS.AWAITING_FINAL_APPROVAL);
 
       if (imageResult.type === 'ai_generated' && imageResult.filepath) {
-        await ctx.replyWithPhoto({ source: imageResult.filepath });
+        try {
+          const imageBuffer = fs.readFileSync(imageResult.filepath);
+          await ctx.replyWithPhoto({ source: imageBuffer, filename: path.basename(imageResult.filepath) });
+        } catch (e) {
+          console.warn('[Pipeline] Gagal kirim revisi foto:', e.message);
+        }
       }
       await ctx.reply(templates.finalApprovalTemplate(freshPipeline, captionResult.caption), { parse_mode: 'Markdown' });
     } catch (err) {
