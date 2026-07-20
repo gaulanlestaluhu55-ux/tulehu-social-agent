@@ -170,7 +170,9 @@ export async function getActiveLearnings(pillarName = null) {
     .order('confidence', { ascending: false });
 
   if (pillarName) {
-    query = query.or(`pillar_related.eq.${pillarName},pillar_related.is.null`);
+    // Escape special characters in pillar name for Supabase filter
+    const escaped = pillarName.replace(/[,()]/g, '\\$&');
+    query = query.or(`pillar_related.eq.${escaped},pillar_related.is.null`);
   }
 
   const { data, error } = await query;
