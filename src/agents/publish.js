@@ -5,19 +5,59 @@ import { updatePipelineStatus, logAgentAction } from '../db/supabase.js';
 import { withRetry } from '../engine/retry.js';
 import { createMediaContainer, publishMediaContainer, getMedia } from '../platforms/instagram.js';
 
+async function ensureBucket() {
+  const listUrl = `${config.SUPABASE_URL}/storage/v1/bucket`;
+  const res = await fetch(listUrl, {
+    headers: { 'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY}` },
+  });
+  const { buckets } = await res.json();
+  const exists = buckets.some(b => b.name === 'instagram-assets');
+  if (exists) return;
+
+  console.log('[Publish] Creating instagram-assets bucket...');
+  await fetch(listUrl, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      id: 'instagram-assets',
+      name: 'instagram-assets',
+      public: true,
+      fileSizeLimit: 10 * 1024 * 1024,
+      allowedMimeTypes: ['image/png', 'image/jpeg', 'image/jpg', 'video/mp4'],
+    }),
+  });
+  console.log('[Publish] Bucket created.');
+}
+
+let bucketReady = false;
+
 async function uploadToStorage(localPath) {
-  const filename = path.basename(localPath);
+  if (!bucketReady) {
+    await ensureBucket();
+    bucketReady = true;
+  }
+
+  const filename = `${Date.now()}_${path.basename(localPath)}`;
   const storageUrl = `${config.SUPABASE_URL}/storage/v1/object/instagram-assets/${filename}`;
   const imageBuffer = fs.readFileSync(localPath);
 
-  await fetch(storageUrl, {
+  const res = await fetch(storageUrl, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY}`,
       'Content-Type': 'image/png',
+      'x-upsert': 'true',
     },
     body: imageBuffer,
   });
+
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Storage upload failed (${res.status}): ${err}`);
+  }
 
   return storageUrl;
 }
