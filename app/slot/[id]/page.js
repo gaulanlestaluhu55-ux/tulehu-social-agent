@@ -1,12 +1,12 @@
 'use client';
 
-import { useState, useEffect, use } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 const STATUS_STEPS = ['draft', 'idea_ready', 'script_ready', 'visual_uploaded', 'caption_ready', 'scheduled'];
 
 export default function SlotPage({ params }) {
-  const { id } = use(params);
+  const { id } = params;
   const router = useRouter();
   const [slot, setSlot] = useState(null);
   const [loading, setLoading] = useState({});
