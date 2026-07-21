@@ -1,19 +1,16 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
 
-// Unit test untuk logika pipeline state machine
-// Catatan: test integration butuh supabase mock — untuk sekarang test struktur state aja
+// Unit test untuk pipeline state machine v2.0
 
-describe('Pipeline states', () => {
+describe('Pipeline states (v2.0)', () => {
   const VALID_STATUSES = [
-    'idea',
-    'script_drafted',
-    'awaiting_script_approval',
-    'script_approved',
-    'awaiting_asset',
-    'generating_asset',
-    'awaiting_final_approval',
-    'approved',
+    'draft',
+    'idea_ready',
+    'script_ready',
+    'visual_uploaded',
+    'caption_ready',
+    'scheduled',
     'publishing',
     'published',
     'failed',
@@ -26,12 +23,26 @@ describe('Pipeline states', () => {
   });
 
   it('urutan pipeline logis', () => {
-    const ideaIdx = VALID_STATUSES.indexOf('idea');
+    const draftIdx = VALID_STATUSES.indexOf('draft');
     const publishedIdx = VALID_STATUSES.indexOf('published');
     const failedIdx = VALID_STATUSES.indexOf('failed');
 
-    assert.ok(ideaIdx >= 0);
-    assert.ok(publishedIdx > ideaIdx, 'published harus setelah idea');
-    assert.ok(failedIdx > ideaIdx, 'failed hanya setelah ada aktivitas');
+    assert.ok(draftIdx >= 0);
+    assert.ok(publishedIdx > draftIdx, 'published harus setelah draft');
+    assert.ok(failedIdx > draftIdx, 'failed hanya setelah ada aktivitas');
+  });
+
+  it('tidak ada status approval lama', () => {
+    const oldStatuses = [
+      'awaiting_script_approval',
+      'script_approved',
+      'awaiting_asset',
+      'generating_asset',
+      'awaiting_final_approval',
+      'approved',
+    ];
+    for (const s of oldStatuses) {
+      assert.ok(!VALID_STATUSES.includes(s), `Status lama "${s}" tidak boleh ada di v2.0`);
+    }
   });
 });
