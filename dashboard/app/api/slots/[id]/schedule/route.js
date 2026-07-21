@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '@/lib/auth';
+import { getSession } from '../../../../lib/auth.js';
 import { scheduleSlot } from '../../../../../src/engine/pipeline.js';
 
 export async function POST(request, { params }) {

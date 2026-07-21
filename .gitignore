@@ -25,3 +25,5 @@ Thumbs.db
 
 # Supabase
 supabase/.temp/
+
+.next/
