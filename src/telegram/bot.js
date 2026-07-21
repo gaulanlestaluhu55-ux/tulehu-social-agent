@@ -113,6 +113,28 @@ export function createBot() {
   bot.command('pages', handlePages);
   bot.command('ads', handleAds);
 
+  bot.command('seed', async (ctx) => {
+    await ctx.reply('🌱 Mulai seed content_calendar...');
+    try {
+      const { supabase } = await import('../db/supabase.js');
+      const pillars = [
+        { day_of_week: 0, pillar_name: 'Fleksibel — rekomendasi Analysis agent', needs_real_photo: false, fallback_ai_pillar: null },
+        { day_of_week: 1, pillar_name: 'Produk Highlight — showcase kaos custom', needs_real_photo: true, fallback_ai_pillar: 'Quote grafis inspirasi desain' },
+        { day_of_week: 2, pillar_name: 'Tips/edukasi sablon — cara rawat kaos, beda DTF & sablon manual', needs_real_photo: false, fallback_ai_pillar: null },
+        { day_of_week: 3, pillar_name: 'BTS Proses — behind the scenes produksi', needs_real_photo: true, fallback_ai_pillar: 'Konten AI visual storytelling' },
+        { day_of_week: 4, pillar_name: 'Promo/Quote Grafis — inspirasi desain, promo musiman', needs_real_photo: false, fallback_ai_pillar: null },
+        { day_of_week: 5, pillar_name: 'Testimoni Customer — review, unboxing, foto customer', needs_real_photo: true, fallback_ai_pillar: 'Testimoni tekstual + grafis pendukung' },
+        { day_of_week: 6, pillar_name: 'Interaktif — Q&A, polling, challenge', needs_real_photo: false, fallback_ai_pillar: null },
+      ];
+      await supabase.from('content_calendar').delete().gte('day_of_week', 0);
+      const { data, error } = await supabase.from('content_calendar').insert(pillars).select();
+      if (error) throw error;
+      await ctx.reply(`✅ Seed berhasil! ${data.length} pilar tersimpan.`);
+    } catch (e) {
+      await ctx.reply(`❌ Seed gagal: ${e.message}`);
+    }
+  });
+
   bot.command('dm', async (ctx) => {
     const parts = ctx.message.text.match(/^\/dm\s+(\S+)\s+(.+)/s);
     if (!parts) {
