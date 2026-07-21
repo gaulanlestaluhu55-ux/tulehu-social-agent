@@ -9,6 +9,7 @@ import { runAnalysisAgent } from './analysis.js';
 import { runPublishAgent } from './publish.js';
 import { callWithFailover, multimodalText } from '../llm/client.js';
 import { escapeMarkdown } from '../utils/helpers.js';
+import { compressForTelegram } from '../utils/image.js';
 import { needsVisualRecheck } from '../utils/quickpost.js';
 import * as templates from '../telegram/templates.js';
 import {
@@ -244,7 +245,7 @@ export async function handleResume(ctx) {
     } else if (result.status === PIPELINE_STATUS.AWAITING_ASSET) {
       await ctx.reply(templates.requestPhotoTemplate(result.pipeline), { parse_mode: 'Markdown' });
     } else if (result.status === PIPELINE_STATUS.AWAITING_FINAL_APPROVAL) {
-      const caption = result.captionResult?.caption || result.pipeline.caption_content;
+      const caption = result.pipeline.caption_content || '';
       await ctx.reply(templates.finalApprovalTemplate(result.pipeline, caption), { parse_mode: 'Markdown' });
     } else if (result.permalink) {
       await ctx.reply(templates.publishConfirmationTemplate(result), { parse_mode: 'Markdown' });
@@ -312,11 +313,11 @@ export async function handleApprove(ctx, today) {
       if (result.status === PIPELINE_STATUS.AWAITING_ASSET) {
         await ctx.reply(templates.requestPhotoTemplate(result.pipeline), { parse_mode: 'Markdown' });
       } else if (result.status === PIPELINE_STATUS.AWAITING_FINAL_APPROVAL) {
-        const caption = result.captionResult?.caption || result.pipeline.caption_content;
+        const caption = result.pipeline.caption_content || '';
         if (result.imageResult?.filepath) {
           try {
-            const imageBuffer = fs.readFileSync(result.imageResult.filepath);
-            await ctx.replyWithPhoto({ source: imageBuffer, filename: path.basename(result.imageResult.filepath) });
+            const { buffer } = await compressForTelegram(result.imageResult.filepath);
+            await ctx.replyWithPhoto({ source: buffer, filename: path.basename(result.imageResult.filepath) });
           } catch (e) {
             console.warn('[Pipeline] Gagal kirim preview foto:', e.message);
           }
@@ -380,13 +381,13 @@ export async function handleRevise(ctx, today, note) {
 
       if (imageResult.type === 'ai_generated' && imageResult.filepath) {
         try {
-          const imageBuffer = fs.readFileSync(imageResult.filepath);
-          await ctx.replyWithPhoto({ source: imageBuffer, filename: path.basename(imageResult.filepath) });
+          const { buffer } = await compressForTelegram(imageResult.filepath);
+          await ctx.replyWithPhoto({ source: buffer, filename: path.basename(imageResult.filepath) });
         } catch (e) {
           console.warn('[Pipeline] Gagal kirim revisi foto:', e.message);
         }
       }
-      await ctx.reply(templates.finalApprovalTemplate(freshPipeline, captionResult.caption), { parse_mode: 'Markdown' });
+      await ctx.reply(templates.finalApprovalTemplate(freshPipeline, freshPipeline.caption_content || ''), { parse_mode: 'Markdown' });
     } catch (err) {
       await ctx.reply(templates.errorTemplate(err.message), { parse_mode: 'Markdown' });
     }
@@ -439,7 +440,7 @@ export async function handlePhoto(ctx, photo, awaitingPhoto) {
 
     await ctx.replyWithPhoto(photo.file_id);
     await ctx.reply(
-      templates.finalApprovalTemplate(freshPipeline, captionResult.caption || freshPipeline.caption_content),
+      templates.finalApprovalTemplate(freshPipeline, freshPipeline.caption_content || ''),
       { parse_mode: 'Markdown' }
     );
   } catch (err) {

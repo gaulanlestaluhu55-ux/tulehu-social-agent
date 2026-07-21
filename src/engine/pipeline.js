@@ -212,9 +212,9 @@ export async function autoPipelineToEnd(pipeline) {
   }
 
   // Langsung publish
+  const freshPipeline = await getPipelineById(fresh.id);
   await updatePipelineStatus(fresh.id, PIPELINE_STATUS.AWAITING_FINAL_APPROVAL, {
     asset_url: imageResult.filepath || imageResult.url,
-    caption_content: captionResult.caption,
   });
 
   const published = await publishFinal(await getPipelineById(fresh.id));
