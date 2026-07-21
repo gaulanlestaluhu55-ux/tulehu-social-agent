@@ -38,25 +38,48 @@ export async function runIdeaAgent(pipeline) {
 
   let ideas;
   try {
-    const cleaned = result.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    const parsed = JSON.parse(cleaned);
+    let cleaned = result.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    let parsed = JSON.parse(cleaned);
+
+    // Handle nested string: {"options": "[{...}]"} → parse again
+    if (parsed && typeof parsed.options === 'string') {
+      parsed = JSON.parse(parsed.options);
+    }
+    if (parsed && typeof parsed === 'string') {
+      parsed = JSON.parse(parsed);
+    }
 
     // Handle both formats: {options: [...]} or single object
     if (Array.isArray(parsed.options)) {
       ideas = parsed.options;
     } else if (Array.isArray(parsed)) {
       ideas = parsed;
-    } else {
-      // Single idea — wrap in array and add 2 more generic alternatives
+    } else if (parsed && typeof parsed === 'object') {
       ideas = [parsed];
+    } else {
+      throw new Error('Cannot parse ideas');
     }
   } catch (err) {
-    // Fallback: create single idea from text
-    ideas = [{
-      angle: result.content.split('\n')[0].replace(/^["\s]*|["\s]*$/g, '').substring(0, 100),
-      description: result.content.substring(0, 200),
-      visual_type: 'ai_generated',
-    }];
+    // Last resort: try to extract JSON from the raw text
+    try {
+      const jsonMatch = result.content.match(/\{[\s\S]*"options"[\s\S]*\}/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[0]);
+        if (Array.isArray(parsed.options)) {
+          ideas = parsed.options;
+        } else {
+          throw new Error('No options array');
+        }
+      } else {
+        throw new Error('No JSON found');
+      }
+    } catch {
+      ideas = [{
+        angle: 'Tips & edukasi praktis',
+        description: `Konten tips & edukasi praktis untuk pilar ${pipeline.pillar_name}`,
+        visual_type: 'ai_generated',
+      }];
+    }
   }
 
   // Ensure 3-5 options minimum

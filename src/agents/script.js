@@ -41,6 +41,15 @@ export async function runScriptAgent(pipeline) {
   try {
     const cleaned = result.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     scriptContent = JSON.parse(cleaned);
+
+    // Handle nested string: hook/body might contain JSON string
+    if (typeof scriptContent.hook === 'string' && scriptContent.hook.includes('"hook"')) {
+      const inner = JSON.parse(scriptContent.hook);
+      scriptContent = { ...scriptContent, ...inner };
+    }
+    if (typeof scriptContent.body === 'string') {
+      scriptContent.body = [scriptContent.body];
+    }
   } catch (err) {
     if (isCarousel) {
       scriptContent = {
