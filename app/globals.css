@@ -202,11 +202,10 @@ textarea.input {
 }
 
 .copy-btn {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
   padding: 0.25rem 0.5rem;
   font-size: 0.75rem;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .prompt-box {
