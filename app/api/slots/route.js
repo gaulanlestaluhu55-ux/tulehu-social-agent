@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getSession } from '../../lib/auth.js';
-import { createSlot, listSlots } from '../../../../src/engine/pipeline.js';
+import { getSession } from '../../../lib/auth.js';
+import { createSlot, listSlots } from '../../../src/engine/pipeline.js';
 
 export async function GET(request) {
   const session = await getSession();
