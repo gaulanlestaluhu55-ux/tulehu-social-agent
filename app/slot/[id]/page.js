@@ -41,8 +41,9 @@ export default function SlotPage({ params }) {
     }
   };
 
-  const apiCall = async (url, method = 'POST', body = null) => {
-    setLoading(l => ({ ...l, [url]: true }));
+  const apiCall = async (url, method = 'POST', body = null, loadingKey = null) => {
+    const key = loadingKey || url;
+    setLoading(l => ({ ...l, [key]: true }));
     try {
       const opts = { method, headers: { 'Content-Type': 'application/json' } };
       if (body) opts.body = JSON.stringify(body);
@@ -52,12 +53,12 @@ export default function SlotPage({ params }) {
       if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
       return data;
     } finally {
-      setLoading(l => ({ ...l, [url]: false }));
+      setLoading(l => ({ ...l, [key]: false }));
     }
   };
 
   const generateIdeas = async () => {
-    await apiCall(`/api/slots/${id}/idea`);
+    await apiCall(`/api/slots/${id}/idea`, 'POST', null, 'idea');
     loadSlot();
   };
 
@@ -67,18 +68,18 @@ export default function SlotPage({ params }) {
   };
 
   const generateScript = async () => {
-    const data = await apiCall(`/api/slots/${id}/script`);
+    const data = await apiCall(`/api/slots/${id}/script`, 'POST', null, 'script');
     setEditScript(data.scriptContent);
     loadSlot();
   };
 
   const saveScript = async () => {
-    await apiCall(`/api/slots/${id}/script`, 'PUT', { script: editScript });
+    await apiCall(`/api/slots/${id}/script`, 'PUT', { script: editScript }, 'script');
     loadSlot();
   };
 
   const generateVisualBrief = async () => {
-    await apiCall(`/api/slots/${id}/visual-brief`);
+    await apiCall(`/api/slots/${id}/visual-brief`, 'POST', null, 'visual-brief');
     loadSlot();
   };
 
@@ -100,7 +101,7 @@ export default function SlotPage({ params }) {
   };
 
   const generateCaption = async () => {
-    const data = await apiCall(`/api/slots/${id}/caption`);
+    const data = await apiCall(`/api/slots/${id}/caption`, 'POST', null, 'caption');
     setEditCaption(data.caption || '');
     setEditHashtags((data.hashtags || []).join(', '));
     loadSlot();
@@ -108,14 +109,14 @@ export default function SlotPage({ params }) {
 
   const saveCaption = async () => {
     const hashtags = editHashtags.split(',').map(h => h.trim()).filter(Boolean);
-    await apiCall(`/api/slots/${id}/caption`, 'PUT', { caption: editCaption, hashtags });
+    await apiCall(`/api/slots/${id}/caption`, 'PUT', { caption: editCaption, hashtags }, 'caption');
     loadSlot();
   };
 
   const schedule = async () => {
     if (!scheduleDate) return;
     const scheduledAt = `${scheduleDate}T${scheduleTime}:00+09:00`;
-    await apiCall(`/api/slots/${id}/schedule`, 'POST', { scheduledAt });
+    await apiCall(`/api/slots/${id}/schedule`, 'POST', { scheduledAt }, 'schedule');
     loadSlot();
   };
 
@@ -199,7 +200,7 @@ export default function SlotPage({ params }) {
           </div>
         ) : (
           <button className="btn btn-primary" onClick={generateIdeas} disabled={loading.idea}>
-            {loading.idea ? 'Generating...' : 'Generate Ideas'}
+            {loading.idea ? <><span className="spinner" />Generating...</> : 'Generate Ideas'}
           </button>
         )}
       </div>
@@ -210,11 +211,11 @@ export default function SlotPage({ params }) {
           <h3>2. Script {isCarousel && '(Carousel)'}</h3>
           {slot.status === 'draft' || slot.status === 'idea_ready' ? (
             <button className="btn btn-primary" onClick={generateScript} disabled={loading.script || slot.idea_selected_index == null}>
-              {loading.script ? 'Generating...' : 'Generate Script'}
+              {loading.script ? <><span className="spinner" />Generating...</> : 'Generate Script'}
             </button>
           ) : editScript ? (
             <button className="btn btn-secondary" onClick={saveScript} disabled={loading.script}>
-              Save Changes
+              {loading.script ? <><span className="spinner" />Saving...</> : 'Save Changes'}
             </button>
           ) : null}
         </div>
@@ -278,7 +279,7 @@ export default function SlotPage({ params }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <h3>3. Visual Brief {isCarousel && `(${(Array.isArray(slot.image_brief) ? slot.image_brief : [slot.image_brief]).filter(Boolean).length} slides)`}</h3>
           <button className="btn btn-secondary" onClick={generateVisualBrief} disabled={loading['visual-brief']}>
-            {loading['visual-brief'] ? 'Generating...' : 'Generate Brief'}
+            {loading['visual-brief'] ? <><span className="spinner" />Generating...</> : 'Generate Brief'}
           </button>
         </div>
         {slot.image_brief && isCarousel && Array.isArray(slot.image_brief) ? (
@@ -393,7 +394,7 @@ export default function SlotPage({ params }) {
                   </div>
                 ) : (
                   <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
-                    {loading[`visual-${i}`] ? 'Uploading...' : `Upload Slide ${i + 1}`}
+                    {loading[`visual-${i}`] ? <><span className="spinner" />Uploading...</> : `Upload Slide ${i + 1}`}
                     <input type="file" accept="image/*" onChange={(e) => uploadVisual(e, i)} hidden disabled={loading[`visual-${i}`]} />
                   </label>
                 )}
@@ -407,7 +408,7 @@ export default function SlotPage({ params }) {
           </div>
         ) : (
           <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
-            {loading.visual ? 'Uploading...' : 'Pilih Foto'}
+            {loading.visual ? <><span className="spinner" />Uploading...</> : 'Pilih Foto'}
             <input type="file" accept="image/*" onChange={uploadVisual} hidden disabled={loading.visual} />
           </label>
         )}
@@ -419,11 +420,11 @@ export default function SlotPage({ params }) {
           <h3>5. Caption</h3>
           <div style={{ display: 'flex', gap: '0.5rem' }}>
             <button className="btn btn-secondary" onClick={generateCaption} disabled={loading.caption}>
-              {loading.caption ? 'Generating...' : 'Generate Caption'}
+              {loading.caption ? <><span className="spinner" />Generating...</> : 'Generate Caption'}
             </button>
             {editCaption && (
               <button className="btn btn-primary" onClick={saveCaption} disabled={loading.caption}>
-                Save Changes
+                {loading.caption ? <><span className="spinner" />Saving...</> : 'Save Changes'}
               </button>
             )}
           </div>
@@ -450,7 +451,7 @@ export default function SlotPage({ params }) {
               <input className="input" type="time" value={scheduleTime} onChange={(e) => setScheduleTime(e.target.value)} />
             </div>
             <button className="btn btn-primary" onClick={schedule} disabled={!scheduleDate || loading.schedule}>
-              {loading.schedule ? 'Scheduling...' : 'Schedule'}
+              {loading.schedule ? <><span className="spinner" />Scheduling...</> : 'Schedule'}
             </button>
           </div>
         )}
