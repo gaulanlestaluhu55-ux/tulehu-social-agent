@@ -117,7 +117,8 @@ export default function SlotPage({ params }) {
         setSlot(prev => ({ ...prev, asset_url: data.url, status: 'visual_uploaded' }));
       }
       showToast(slideIndex !== null ? `Slide ${slideIndex + 1} berhasil di-upload!` : 'Visual berhasil di-upload!');
-      await loadSlot();
+    } catch (e) {
+      showToast(e.message, 'error');
     } finally {
       setLoading(l => ({ ...l, [key]: false }));
     }
