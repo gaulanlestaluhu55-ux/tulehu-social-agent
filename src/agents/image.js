@@ -13,12 +13,30 @@ const brandVisualContext = fs.readFileSync(path.join(__dirname, '../templates/br
 async function generateWithCloudflare(prompt, options = {}) {
   const url = `https://api.cloudflare.com/client/v4/accounts/${config.CLOUDFLARE_ACCOUNT_ID}/ai/run/${config.CLOUDFLARE_AI_MODEL}`;
 
-  const response = await axios.post(url, {
+  const requestBody = {
     prompt: `${prompt}\n\nCatatan brand: ${brandVisualContext}`,
-    negative_prompt: options.negative_prompt || 'nsfw, low quality, blurry, distorted, text, watermark, extra fingers, bad anatomy',
-    num_steps: options.steps || 20,
-    guidance: options.cfg || 7.5,
-  }, {
+  };
+
+  // Only add optional params if they exist and are valid numbers
+  if (options.negative_prompt && typeof options.negative_prompt === 'string') {
+    requestBody.negative_prompt = options.negative_prompt;
+  } else {
+    requestBody.negative_prompt = 'nsfw, low quality, blurry, distorted, text, watermark, extra fingers, bad anatomy';
+  }
+  
+  if (typeof options.steps === 'number' && options.steps > 0) {
+    requestBody.num_steps = Math.min(options.steps, 50);
+  } else {
+    requestBody.num_steps = 20;
+  }
+  
+  if (typeof options.cfg === 'number' && options.cfg > 0) {
+    requestBody.guidance = Math.min(options.cfg, 20);
+  } else {
+    requestBody.guidance = 7.5;
+  }
+
+  const response = await axios.post(url, requestBody, {
     headers: {
       'Authorization': `Bearer ${config.CLOUDFLARE_API_TOKEN}`,
       'Content-Type': 'application/json',
