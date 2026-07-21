@@ -17,8 +17,10 @@ export async function POST(request, { params }) {
 
     const buffer = Buffer.from(await file.arrayBuffer());
     const filename = file.name || 'upload.jpg';
+    const slideIndex = formData.get('slideIndex');
+    const slideIdx = slideIndex !== null && slideIndex !== undefined ? parseInt(slideIndex, 10) : null;
 
-    const url = await uploadVisual(id, buffer, filename);
+    const url = await uploadVisual(id, buffer, filename, isNaN(slideIdx) ? null : slideIdx);
     return NextResponse.json({ url });
   } catch (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

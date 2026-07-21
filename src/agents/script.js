@@ -8,28 +8,31 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const brandContext = fs.readFileSync(path.join(__dirname, '../templates/brand-context.txt'), 'utf-8');
-const systemPrompt = fs.readFileSync(path.join(__dirname, '../templates/prompts/script.txt'), 'utf-8').replace(/\{brand_context\}/g, brandContext);
+const singlePrompt = fs.readFileSync(path.join(__dirname, '../templates/prompts/script.txt'), 'utf-8').replace(/\{brand_context\}/g, brandContext);
+const carouselPrompt = fs.readFileSync(path.join(__dirname, '../templates/prompts/script-carousel.txt'), 'utf-8').replace(/\{brand_context\}/g, brandContext);
 
 export async function runScriptAgent(pipeline) {
-  console.log('[Script Agent] Menulis naskah konten...');
+  const isCarousel = pipeline.content_type === 'carousel';
+  console.log(`[Script Agent] Menulis naskah konten (${isCarousel ? 'carousel' : 'single_image'})...`);
 
   const learnings = await getActiveLearnings(pipeline.pillar_name);
   const learningsText = learnings.length
     ? learnings.map(l => `- ${l.insight_summary} (confidence: ${l.confidence})`).join('\n')
     : 'Belum ada learning';
 
-  const prompt = systemPrompt.replace('{learnings}', learningsText);
+  const basePrompt = (isCarousel ? carouselPrompt : singlePrompt).replace('{learnings}', learningsText);
 
   const userPrompt = `Buatkan naskah untuk ide konten ini:
 - Judul: ${pipeline.idea_content.angle}
 - Deskripsi: ${pipeline.idea_content.description}
 - Tipe visual: ${pipeline.idea_content.visual_type}
+- Tipe konten: ${isCarousel ? 'carousel (3-5 slide)' : 'single image'}
 - Pilar: ${pipeline.pillar_name}`;
 
   const startTime = Date.now();
   const result = await withRetry(async () => {
     return await callWithFailover(agentProviders.script, [
-      { role: 'system', content: prompt },
+      { role: 'system', content: basePrompt },
       { role: 'user', content: userPrompt },
     ], { temperature: 0.7 });
   }, 'script');
@@ -39,10 +42,31 @@ export async function runScriptAgent(pipeline) {
     const cleaned = result.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
     scriptContent = JSON.parse(cleaned);
   } catch (err) {
-    scriptContent = { hook: result.content.substring(0, 150), body: [result.content], cta: 'Chat WA di bio!' };
+    if (isCarousel) {
+      scriptContent = {
+        hook: result.content.substring(0, 150),
+        body: [result.content],
+        cta: 'Chat WA di bio!',
+        slides: [
+          { headline: 'Hook', description: result.content.substring(0, 200), visual_notes: 'Foto produk kaos sablon' },
+          { headline: 'Detail', description: result.content.substring(200, 400), visual_notes: 'Detail proses sablon' },
+          { headline: 'CTA', description: 'Chat WA di bio!', visual_notes: 'WhatsApp icon + nomor' },
+        ],
+      };
+    } else {
+      scriptContent = { hook: result.content.substring(0, 150), body: [result.content], cta: 'Chat WA di bio!' };
+    }
   }
 
-  await updatePipelineStatus(pipeline.id, PIPELINE_STATUS.SCRIPT_DRAFTED, { script_content: scriptContent });
+  if (isCarousel && !scriptContent.slides) {
+    scriptContent.slides = [
+      { headline: scriptContent.hook, description: scriptContent.body?.[0] || '', visual_notes: 'Visual hook' },
+      { headline: 'Isi', description: scriptContent.body?.join(' ') || '', visual_notes: 'Visual utama' },
+      { headline: 'CTA', description: scriptContent.cta, visual_notes: 'Visual CTA' },
+    ];
+  }
+
+  await updatePipelineStatus(pipeline.id, PIPELINE_STATUS.SCRIPT_READY, { script_content: scriptContent });
 
   await logAgentAction({
     pipeline_id: pipeline.id,
@@ -56,5 +80,6 @@ export async function runScriptAgent(pipeline) {
   });
 
   console.log(`[Script Agent] Hook: ${scriptContent.hook}`);
+  if (isCarousel) console.log(`[Script Agent] Slides: ${scriptContent.slides.length}`);
   return scriptContent;
 }

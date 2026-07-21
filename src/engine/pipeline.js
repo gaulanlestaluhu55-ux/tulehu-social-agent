@@ -16,13 +16,14 @@ import { supabase } from '../db/supabase.js';
  * @param {string} pillarName - free text pillar name
  * @returns {object} created pipeline row
  */
-export async function createSlot(calendarDate, scheduledTime, pillarName) {
+export async function createSlot(calendarDate, scheduledTime, pillarName, contentType = 'single_image') {
   const { data, error } = await supabase
     .from('content_pipeline')
     .insert({
       calendar_date: calendarDate,
       scheduled_time: scheduledTime || null,
       pillar_name: pillarName,
+      content_type: contentType,
       status: PIPELINE_STATUS.DRAFT,
     })
     .select()
@@ -132,21 +133,46 @@ export async function generateVisualBrief(pipelineId) {
   if (!pipeline) throw new Error(`Pipeline ${pipelineId} not found`);
   if (!pipeline.script_content) throw new Error('Generate script terlebih dahulu');
 
-  logger.info(`[Pipeline] Generating visual brief for slot ${pipelineId}...`);
+  const isCarousel = pipeline.content_type === 'carousel';
+  logger.info(`[Pipeline] Generating visual brief for slot ${pipelineId} (${isCarousel ? 'carousel' : 'single'})...`);
 
-  const imageBriefResult = await runImageBriefAgent(pipeline, pipeline.script_content);
-  const imageBrief = imageBriefResult.brief;
+  if (isCarousel && pipeline.script_content.slides) {
+    const briefs = [];
+    const prompts = [];
 
-  const promptOptResult = await runPromptOptimizer(imageBrief);
-  const optimizedPrompt = promptOptResult.optimized;
+    for (let i = 0; i < pipeline.script_content.slides.length; i++) {
+      const slide = pipeline.script_content.slides[i];
+      logger.info(`[Pipeline] Brief for slide ${i + 1}/${pipeline.script_content.slides.length}: ${slide.headline}`);
 
-  await updatePipelineStatus(pipelineId, pipeline.status, {
-    image_brief: imageBrief,
-    optimized_prompt: optimizedPrompt,
-  });
+      const imageBriefResult = await runImageBriefAgent(pipeline, pipeline.script_content, slide);
+      briefs.push(imageBriefResult.brief);
 
-  logger.info(`[Pipeline] Visual brief ready: ${imageBrief.style}, ${imageBrief.mood}`);
-  return { imageBrief, optimizedPrompt };
+      const promptOptResult = await runPromptOptimizer(imageBriefResult.brief, pipeline.campaign_plan, i);
+      prompts.push(promptOptResult.optimized);
+    }
+
+    await updatePipelineStatus(pipelineId, pipeline.status, {
+      image_brief: briefs,
+      optimized_prompt: prompts,
+    });
+
+    logger.info(`[Pipeline] ${briefs.length} carousel briefs ready`);
+    return { imageBriefs: briefs, optimizedPrompts: prompts };
+  } else {
+    const imageBriefResult = await runImageBriefAgent(pipeline, pipeline.script_content);
+    const imageBrief = imageBriefResult.brief;
+
+    const promptOptResult = await runPromptOptimizer(imageBrief, pipeline.campaign_plan);
+    const optimizedPrompt = promptOptResult.optimized;
+
+    await updatePipelineStatus(pipelineId, pipeline.status, {
+      image_brief: imageBrief,
+      optimized_prompt: optimizedPrompt,
+    });
+
+    logger.info(`[Pipeline] Visual brief ready: ${imageBrief.style}, ${imageBrief.mood}`);
+    return { imageBrief, optimizedPrompt };
+  }
 }
 
 /**
@@ -156,11 +182,13 @@ export async function generateVisualBrief(pipelineId) {
  * @param {string} filename - original filename
  * @returns {string} public URL
  */
-export async function uploadVisual(pipelineId, fileBuffer, filename) {
+export async function uploadVisual(pipelineId, fileBuffer, filename, slideIndex = null) {
   const pipeline = await getPipelineById(pipelineId);
   if (!pipeline) throw new Error(`Pipeline ${pipelineId} not found`);
 
-  const safeFilename = `${pipelineId}/${Date.now()}-${filename.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
+  const isCarousel = pipeline.content_type === 'carousel';
+  const slidePath = isCarousel && slideIndex !== null ? `slide-${slideIndex}` : '';
+  const safeFilename = `${pipelineId}/${slidePath ? slidePath + '/' : ''}${Date.now()}-${filename.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
 
   const { error: uploadError } = await supabase.storage
     .from('content-assets')
@@ -177,12 +205,22 @@ export async function uploadVisual(pipelineId, fileBuffer, filename) {
 
   const publicUrl = urlData.publicUrl;
 
-  await updatePipelineStatus(pipelineId, PIPELINE_STATUS.VISUAL_UPLOADED, {
-    asset_url: publicUrl,
-    asset_type: 'image/jpeg',
-  });
+  if (isCarousel && slideIndex !== null) {
+    const currentAssets = Array.isArray(pipeline.asset_url) ? [...pipeline.asset_url] : [];
+    currentAssets[slideIndex] = publicUrl;
+    await updatePipelineStatus(pipelineId, null, {
+      asset_url: currentAssets,
+      asset_type: 'image/jpeg',
+    });
+    logger.info(`[Pipeline] Carousel slide ${slideIndex} uploaded: ${publicUrl}`);
+  } else {
+    await updatePipelineStatus(pipelineId, PIPELINE_STATUS.VISUAL_UPLOADED, {
+      asset_url: publicUrl,
+      asset_type: 'image/jpeg',
+    });
+    logger.info(`[Pipeline] Visual uploaded: ${publicUrl}`);
+  }
 
-  logger.info(`[Pipeline] Visual uploaded: ${publicUrl}`);
   return publicUrl;
 }
 

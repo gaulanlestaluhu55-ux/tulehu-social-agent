@@ -48,8 +48,9 @@ Example Output:
   "seed": -1
 }`;
 
-export async function runPromptOptimizer(imageBrief, campaignPlan) {
-  console.log('[Prompt Optimizer] Optimizing prompt for SDXL...');
+export async function runPromptOptimizer(imageBrief, campaignPlan, slideIndex = null) {
+  const slideLabel = slideIndex !== null ? ` (slide ${slideIndex + 1})` : '';
+  console.log(`[Prompt Optimizer] Optimizing prompt for SDXL${slideLabel}...`);
 
   const userPrompt = `Optimize this image brief for SDXL:
 

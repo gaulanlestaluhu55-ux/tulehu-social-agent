@@ -16,6 +16,9 @@ export default function SlotPage({ params }) {
   const [scheduleDate, setScheduleDate] = useState('');
   const [scheduleTime, setScheduleTime] = useState('09:00');
   const [copiedField, setCopiedField] = useState(null);
+  const [activeSlide, setActiveSlide] = useState(0);
+
+  const isCarousel = slot?.content_type === 'carousel';
 
   useEffect(() => {
     checkAuth();
@@ -79,18 +82,20 @@ export default function SlotPage({ params }) {
     loadSlot();
   };
 
-  const uploadVisual = async (e) => {
+  const uploadVisual = async (e, slideIndex = null) => {
     const file = e.target.files[0];
     if (!file) return;
-    setLoading(l => ({ ...l, visual: true }));
+    const key = slideIndex !== null ? `visual-${slideIndex}` : 'visual';
+    setLoading(l => ({ ...l, [key]: true }));
     try {
       const formData = new FormData();
       formData.append('file', file);
+      if (slideIndex !== null) formData.append('slideIndex', slideIndex);
       const res = await fetch(`/api/slots/${id}/visual`, { method: 'POST', body: formData });
       if (!res.ok) throw new Error('Upload failed');
       loadSlot();
     } finally {
-      setLoading(l => ({ ...l, visual: false }));
+      setLoading(l => ({ ...l, [key]: false }));
     }
   };
 
@@ -120,6 +125,25 @@ export default function SlotPage({ params }) {
     setTimeout(() => setCopiedField(null), 2000);
   };
 
+  const addSlide = () => {
+    if (!editScript?.slides) return;
+    const newSlides = [...editScript.slides, { headline: '', description: '', visual_notes: '' }];
+    setEditScript({ ...editScript, slides: newSlides });
+  };
+
+  const removeSlide = (idx) => {
+    if (!editScript?.slides) return;
+    const newSlides = editScript.slides.filter((_, i) => i !== idx);
+    setEditScript({ ...editScript, slides: newSlides });
+  };
+
+  const updateSlide = (idx, field, value) => {
+    if (!editScript?.slides) return;
+    const newSlides = [...editScript.slides];
+    newSlides[idx] = { ...newSlides[idx], [field]: value };
+    setEditScript({ ...editScript, slides: newSlides });
+  };
+
   const getStepIndex = (status) => STATUS_STEPS.indexOf(status);
 
   if (!slot) return <div className="container"><p>Loading...</p></div>;
@@ -136,7 +160,10 @@ export default function SlotPage({ params }) {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
         <div>
           <h2>{slot.calendar_date} — {slot.pillar_name}</h2>
-          <span className={`badge badge-${slot.status}`}>{slot.status}</span>
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.25rem' }}>
+            <span className={`badge badge-${slot.status}`}>{slot.status}</span>
+            <span className="badge badge-draft">{isCarousel ? 'Carousel' : 'Single Image'}</span>
+          </div>
         </div>
       </div>
 
@@ -180,7 +207,7 @@ export default function SlotPage({ params }) {
       {/* Step 2: Script */}
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h3>2. Script</h3>
+          <h3>2. Script {isCarousel && '(Carousel)'}</h3>
           {slot.status === 'draft' || slot.status === 'idea_ready' ? (
             <button className="btn btn-primary" onClick={generateScript} disabled={loading.script || slot.idea_selected_index == null}>
               {loading.script ? 'Generating...' : 'Generate Script'}
@@ -197,10 +224,47 @@ export default function SlotPage({ params }) {
               <label style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.25rem', display: 'block' }}>Hook</label>
               <textarea className="input" value={editScript.hook || ''} onChange={(e) => setEditScript({ ...editScript, hook: e.target.value })} />
             </div>
-            <div>
-              <label style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.25rem', display: 'block' }}>Body</label>
-              <textarea className="input" value={editScript.body || ''} onChange={(e) => setEditScript({ ...editScript, body: e.target.value })} style={{ minHeight: '150px' }} />
-            </div>
+            {!isCarousel && (
+              <div>
+                <label style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.25rem', display: 'block' }}>Body</label>
+                <textarea className="input" value={Array.isArray(editScript.body) ? editScript.body.join('\n') : editScript.body || ''} onChange={(e) => setEditScript({ ...editScript, body: e.target.value.split('\n').filter(Boolean) })} style={{ minHeight: '150px' }} />
+              </div>
+            )}
+            {isCarousel && editScript.slides && (
+              <div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <label style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Slides ({editScript.slides.length})</label>
+                  <button className="btn btn-secondary" onClick={addSlide} style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}>+ Tambah Slide</button>
+                </div>
+                <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+                  {editScript.slides.map((slide, i) => (
+                    <button
+                      key={i}
+                      className={`btn ${activeSlide === i ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => setActiveSlide(i)}
+                      style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                </div>
+                {editScript.slides[activeSlide] && (
+                  <div className="card" style={{ background: 'var(--bg)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <span style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Slide {activeSlide + 1}</span>
+                      {editScript.slides.length > 1 && (
+                        <button className="btn btn-danger" onClick={() => removeSlide(activeSlide)} style={{ fontSize: '0.75rem', padding: '0.15rem 0.4rem' }}>Hapus</button>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                      <input className="input" placeholder="Headline" value={editScript.slides[activeSlide].headline || ''} onChange={(e) => updateSlide(activeSlide, 'headline', e.target.value)} />
+                      <textarea className="input" placeholder="Deskripsi" value={editScript.slides[activeSlide].description || ''} onChange={(e) => updateSlide(activeSlide, 'description', e.target.value)} style={{ minHeight: '80px' }} />
+                      <input className="input" placeholder="Visual Notes" value={editScript.slides[activeSlide].visual_notes || ''} onChange={(e) => updateSlide(activeSlide, 'visual_notes', e.target.value)} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
             <div>
               <label style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.25rem', display: 'block' }}>CTA</label>
               <textarea className="input" value={editScript.cta || ''} onChange={(e) => setEditScript({ ...editScript, cta: e.target.value })} />
@@ -212,55 +276,102 @@ export default function SlotPage({ params }) {
       {/* Step 3: Visual Brief */}
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-          <h3>3. Visual Brief</h3>
+          <h3>3. Visual Brief {isCarousel && `(${(Array.isArray(slot.image_brief) ? slot.image_brief : [slot.image_brief]).filter(Boolean).length} slides)`}</h3>
           <button className="btn btn-secondary" onClick={generateVisualBrief} disabled={loading['visual-brief']}>
             {loading['visual-brief'] ? 'Generating...' : 'Generate Brief'}
           </button>
         </div>
-        {slot.image_brief && (
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-            <div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Style</p>
-              <p>{slot.image_brief.style}</p>
+        {slot.image_brief && isCarousel && Array.isArray(slot.image_brief) ? (
+          <div>
+            <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+              {slot.image_brief.map((brief, i) => (
+                <button
+                  key={i}
+                  className={`btn ${activeSlide === i ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setActiveSlide(i)}
+                  style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                >
+                  Slide {i + 1}
+                </button>
+              ))}
             </div>
-            <div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Mood</p>
-              <p>{slot.image_brief.mood}</p>
-            </div>
-            <div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Lighting</p>
-              <p>{slot.image_brief.lighting}</p>
-            </div>
-            <div>
-              <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Composition</p>
-              <p>{slot.image_brief.composition}</p>
-            </div>
+            {slot.image_brief[activeSlide] && (
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Style</p><p>{slot.image_brief[activeSlide].style}</p></div>
+                <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Mood</p><p>{slot.image_brief[activeSlide].mood}</p></div>
+                <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Lighting</p><p>{slot.image_brief[activeSlide].lighting}</p></div>
+                <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Composition</p><p>{slot.image_brief[activeSlide].composition}</p></div>
+                {slot.image_brief[activeSlide].subject && <div style={{ gridColumn: '1 / -1' }}><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Subject</p><p>{slot.image_brief[activeSlide].subject}</p></div>}
+              </div>
+            )}
           </div>
-        )}
+        ) : slot.image_brief && !isCarousel ? (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+            <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Style</p><p>{slot.image_brief.style}</p></div>
+            <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Mood</p><p>{slot.image_brief.mood}</p></div>
+            <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Lighting</p><p>{slot.image_brief.lighting}</p></div>
+            <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Composition</p><p>{slot.image_brief.composition}</p></div>
+          </div>
+        ) : null}
         {slot.optimized_prompt && (
           <div style={{ marginTop: '1rem' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-              <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>SDXL Prompt (copy ke image generator)</p>
-              <button
-                className="btn btn-secondary copy-btn"
-                onClick={() => copyToClipboard(slot.optimized_prompt.prompt, 'prompt')}
-              >
-                {copiedField === 'prompt' ? '✓ Copied!' : 'Copy'}
-              </button>
-            </div>
-            <div className="prompt-box">{slot.optimized_prompt.prompt}</div>
-            {slot.optimized_prompt.negative_prompt && (
+            {isCarousel && Array.isArray(slot.optimized_prompt) ? (
+              <div>
+                <div style={{ display: 'flex', gap: '0.25rem', marginBottom: '0.75rem', flexWrap: 'wrap' }}>
+                  {slot.optimized_prompt.map((_, i) => (
+                    <button
+                      key={i}
+                      className={`btn ${activeSlide === i ? 'btn-primary' : 'btn-secondary'}`}
+                      onClick={() => setActiveSlide(i)}
+                      style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
+                    >
+                      Prompt {i + 1}
+                    </button>
+                  ))}
+                </div>
+                {slot.optimized_prompt[activeSlide] && (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>SDXL Prompt (Slide {activeSlide + 1})</p>
+                      <button className="btn btn-secondary copy-btn" onClick={() => copyToClipboard(slot.optimized_prompt[activeSlide].prompt, `prompt-${activeSlide}`)}>
+                        {copiedField === `prompt-${activeSlide}` ? '✓ Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                    <div className="prompt-box">{slot.optimized_prompt[activeSlide].prompt}</div>
+                    {slot.optimized_prompt[activeSlide].negative_prompt && (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', marginBottom: '0.5rem' }}>
+                          <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Negative Prompt</p>
+                          <button className="btn btn-secondary copy-btn" onClick={() => copyToClipboard(slot.optimized_prompt[activeSlide].negative_prompt, `neg-${activeSlide}`)}>
+                            {copiedField === `neg-${activeSlide}` ? '✓ Copied!' : 'Copy'}
+                          </button>
+                        </div>
+                        <div className="prompt-box">{slot.optimized_prompt[activeSlide].negative_prompt}</div>
+                      </>
+                    )}
+                  </>
+                )}
+              </div>
+            ) : (
               <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', marginBottom: '0.5rem' }}>
-                  <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Negative Prompt</p>
-                  <button
-                    className="btn btn-secondary copy-btn"
-                    onClick={() => copyToClipboard(slot.optimized_prompt.negative_prompt, 'negative')}
-                  >
-                    {copiedField === 'negative' ? '✓ Copied!' : 'Copy'}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>SDXL Prompt (copy ke image generator)</p>
+                  <button className="btn btn-secondary copy-btn" onClick={() => copyToClipboard(slot.optimized_prompt.prompt, 'prompt')}>
+                    {copiedField === 'prompt' ? '✓ Copied!' : 'Copy'}
                   </button>
                 </div>
-                <div className="prompt-box">{slot.optimized_prompt.negative_prompt}</div>
+                <div className="prompt-box">{slot.optimized_prompt.prompt}</div>
+                {slot.optimized_prompt.negative_prompt && (
+                  <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', marginBottom: '0.5rem' }}>
+                      <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Negative Prompt</p>
+                      <button className="btn btn-secondary copy-btn" onClick={() => copyToClipboard(slot.optimized_prompt.negative_prompt, 'negative')}>
+                        {copiedField === 'negative' ? '✓ Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                    <div className="prompt-box">{slot.optimized_prompt.negative_prompt}</div>
+                  </>
+                )}
               </>
             )}
           </div>
@@ -269,8 +380,27 @@ export default function SlotPage({ params }) {
 
       {/* Step 4: Upload Visual */}
       <div className="card">
-        <h3 style={{ marginBottom: '1rem' }}>4. Upload Visual</h3>
-        {slot.asset_url ? (
+        <h3 style={{ marginBottom: '1rem' }}>4. Upload Visual {isCarousel && `(${Array.isArray(slot.asset_url) ? slot.asset_url.filter(Boolean).length : slot.asset_url ? 1 : 0} uploaded)`}</h3>
+        {isCarousel ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {editScript?.slides?.map((slide, i) => (
+              <div key={i} className="card" style={{ background: 'var(--bg)' }}>
+                <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>Slide {i + 1}: {slide.headline || `Slide ${i + 1}`}</p>
+                {Array.isArray(slot.asset_url) && slot.asset_url[i] ? (
+                  <div>
+                    <img src={slot.asset_url[i]} alt={`Slide ${i + 1}`} style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '6px', marginBottom: '0.5rem' }} />
+                    <p style={{ fontSize: '0.75rem', color: 'var(--success)' }}>✓ Uploaded</p>
+                  </div>
+                ) : (
+                  <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
+                    {loading[`visual-${i}`] ? 'Uploading...' : `Upload Slide ${i + 1}`}
+                    <input type="file" accept="image/*" onChange={(e) => uploadVisual(e, i)} hidden disabled={loading[`visual-${i}`]} />
+                  </label>
+                )}
+              </div>
+            ))}
+          </div>
+        ) : slot.asset_url ? (
           <div>
             <img src={slot.asset_url} alt="Visual" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px', marginBottom: '0.5rem' }} />
             <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Uploaded</p>

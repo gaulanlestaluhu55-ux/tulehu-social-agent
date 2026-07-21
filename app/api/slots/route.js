@@ -35,7 +35,7 @@ export async function POST(request) {
 
     const created = [];
     for (const slot of slots) {
-      const result = await createSlot(slot.date, slot.time, slot.pillar);
+      const result = await createSlot(slot.date, slot.time, slot.pillar, slot.content_type || 'single_image');
       created.push(result);
     }
 

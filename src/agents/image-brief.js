@@ -40,14 +40,21 @@ Rules:
 - Keep composition clean for Instagram
 - Include negative_prompt for quality`;
 
-export async function runImageBriefAgent(pipeline, scriptContent) {
-  console.log('[Image Brief] Creating visual brief...');
+export async function runImageBriefAgent(pipeline, scriptContent, slide = null) {
+  const isCarousel = pipeline.content_type === 'carousel';
+  console.log(`[Image Brief] Creating visual brief${isCarousel && slide ? ` for slide: ${slide.headline}` : ''}...`);
+
+  const slideContext = slide ? `
+- Slide Headline: ${slide.headline}
+- Slide Description: ${slide.description}
+- Slide Visual Notes: ${slide.visual_notes}` : '';
 
   const userPrompt = `Create image brief for:
 - Pillar: ${pipeline.pillar_name}
 - Hook: ${scriptContent.hook}
 - Visual Notes: ${scriptContent.visual_notes || 'None'}
-- Campaign Format: ${pipeline.campaign_plan?.format || 'single_image'}
+${slideContext}
+- Campaign Format: ${pipeline.campaign_plan?.format || (isCarousel ? 'carousel' : 'single_image')}
 - Campaign Mood: ${pipeline.campaign_plan?.visual_mood || 'professional'}
 
 Return JSON brief.`;

@@ -12,6 +12,7 @@ export default function CalendarPage() {
   const [slots, setSlots] = useState([]);
   const [showCreate, setShowCreate] = useState(null);
   const [pillar, setPillar] = useState('');
+  const [contentType, setContentType] = useState('single_image');
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -49,7 +50,7 @@ export default function CalendarPage() {
       const res = await fetch('/api/slots', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ slots: [{ date, pillar: pillar.trim() }] }),
+        body: JSON.stringify({ slots: [{ date, pillar: pillar.trim(), content_type: contentType }] }),
       });
       if (res.ok) {
         setShowCreate(null);
@@ -139,11 +140,30 @@ export default function CalendarPage() {
               onChange={(e) => setPillar(e.target.value)}
               autoFocus
             />
+            <div style={{ marginTop: '0.75rem' }}>
+              <label style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.25rem', display: 'block' }}>Tipe Konten</label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <button
+                  className={`btn ${contentType === 'single_image' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setContentType('single_image')}
+                  type="button"
+                >
+                  Single Image
+                </button>
+                <button
+                  className={`btn ${contentType === 'carousel' ? 'btn-primary' : 'btn-secondary'}`}
+                  onClick={() => setContentType('carousel')}
+                  type="button"
+                >
+                  Carousel
+                </button>
+              </div>
+            </div>
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
               <button className="btn btn-primary" onClick={() => createSlot(`${currentDate.getFullYear()}-${String(currentDate.getMonth()+1).padStart(2,'0')}-${String(showCreate).padStart(2,'0')}`)} disabled={loading || !pillar.trim()}>
                 {loading ? 'Creating...' : 'Buat Slot'}
               </button>
-              <button className="btn btn-secondary" onClick={() => { setShowCreate(null); setPillar(''); }}>Batal</button>
+              <button className="btn btn-secondary" onClick={() => { setShowCreate(null); setPillar(''); setContentType('single_image'); }}>Batal</button>
             </div>
           </div>
         </div>
