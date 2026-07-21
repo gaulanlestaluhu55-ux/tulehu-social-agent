@@ -441,50 +441,55 @@ export default function SlotPage({ params }) {
       <div className="card">
         <h3 style={{ marginBottom: '1rem' }}>4. Upload Visual {isCarousel && `(${Array.isArray(slot.asset_url) ? slot.asset_url.filter(Boolean).length : slot.asset_url ? 1 : 0} uploaded)`}</h3>
         {isCarousel ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-            {editScript?.slides?.map((slide, i) => (
-              <div key={i} className="card" style={{ background: 'var(--bg)' }}>
-                <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>Slide {i + 1}: {slide.headline || `Slide ${i + 1}`}</p>
-                {Array.isArray(slot.asset_url) && slot.asset_url[i] ? (
-                  <div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {editScript?.slides?.map((slide, i) => {
+              const uploaded = Array.isArray(slot.asset_url) && slot.asset_url[i];
+              return (
+                <div key={i} className="card" style={{ background: 'var(--bg)' }}>
+                  <p style={{ fontSize: '0.75rem', color: 'var(--muted)', marginBottom: '0.5rem' }}>Slide {i + 1}: {slide.headline || `Slide ${i + 1}`}</p>
+                  {uploaded && (
                     <img src={slot.asset_url[i]} alt={`Slide ${i + 1}`} style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '6px', marginBottom: '0.5rem' }} />
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <label className="btn" style={{ cursor: 'pointer', background: 'var(--success)', color: '#fff', flex: 1 }}>
-                        {loading[`visual-${i}`] ? <><span className="spinner" />Uploading...</> : '✓ Uploaded — Replace'}
-                        <input type="file" accept="image/*" onChange={(e) => uploadVisual(e, i)} hidden disabled={loading[`visual-${i}`]} />
-                      </label>
+                  )}
+                  <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <label className="btn" style={{
+                      cursor: 'pointer', flex: 1,
+                      background: uploaded ? 'var(--success)' : 'var(--border)',
+                      color: uploaded ? '#fff' : 'var(--fg)',
+                    }}>
+                      {loading[`visual-${i}`] ? <><span className="spinner" />Uploading...</> : uploaded ? '✓ Uploaded — Click to Replace' : `Upload Slide ${i + 1}`}
+                      <input type="file" accept="image/*" onChange={(e) => uploadVisual(e, i)} hidden disabled={loading[`visual-${i}`]} />
+                    </label>
+                    {uploaded && (
                       <button className="btn btn-danger" onClick={() => deleteVisual(i)} disabled={loading[`visual-${i}`]} style={{ padding: '0.5rem 0.75rem' }}>
-                        {loading[`visual-${i}`] ? <span className="spinner" /> : '✕'}
+                        ✕
                       </button>
-                    </div>
+                    )}
                   </div>
-                ) : (
-                  <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
-                    {loading[`visual-${i}`] ? <><span className="spinner" />Uploading...</> : `Upload Slide ${i + 1}`}
-                    <input type="file" accept="image/*" onChange={(e) => uploadVisual(e, i)} hidden disabled={loading[`visual-${i}`]} />
-                  </label>
-                )}
-              </div>
-            ))}
-          </div>
-        ) : slot.asset_url ? (
-          <div>
-            <img src={slot.asset_url} alt="Visual" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px', marginBottom: '0.5rem' }} />
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
-              <label className="btn" style={{ cursor: 'pointer', background: 'var(--success)', color: '#fff', flex: 1 }}>
-                {loading.visual ? <><span className="spinner" />Uploading...</> : '✓ Uploaded — Replace'}
-                <input type="file" accept="image/*" onChange={uploadVisual} hidden disabled={loading.visual} />
-              </label>
-              <button className="btn btn-danger" onClick={() => deleteVisual()} disabled={loading.visual} style={{ padding: '0.5rem 0.75rem' }}>
-                {loading.visual ? <span className="spinner" /> : '✕'}
-              </button>
-            </div>
+                </div>
+              );
+            })}
           </div>
         ) : (
-          <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
-            {loading.visual ? <><span className="spinner" />Uploading...</> : 'Pilih Foto'}
-            <input type="file" accept="image/*" onChange={uploadVisual} hidden disabled={loading.visual} />
-          </label>
+          <div>
+            {slot.asset_url && (
+              <img src={slot.asset_url} alt="Visual" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px', marginBottom: '0.5rem' }} />
+            )}
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <label className="btn" style={{
+                cursor: 'pointer', flex: 1,
+                background: slot.asset_url ? 'var(--success)' : 'var(--border)',
+                color: slot.asset_url ? '#fff' : 'var(--fg)',
+              }}>
+                {loading.visual ? <><span className="spinner" />Uploading...</> : slot.asset_url ? '✓ Uploaded — Replace' : 'Pilih Foto'}
+                <input type="file" accept="image/*" onChange={uploadVisual} hidden disabled={loading.visual} />
+              </label>
+              {slot.asset_url && (
+                <button className="btn btn-danger" onClick={() => deleteVisual()} disabled={loading.visual} style={{ padding: '0.5rem 0.75rem' }}>
+                  ✕
+                </button>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
