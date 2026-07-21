@@ -6,34 +6,43 @@ import { withRetry } from '../engine/retry.js';
 import { createMediaContainer, publishMediaContainer, getMedia } from '../platforms/instagram.js';
 
 async function ensureBucket() {
-  const listUrl = `${config.SUPABASE_URL}/storage/v1/bucket`;
-  const res = await fetch(listUrl, {
-    headers: { 'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY}` },
-  });
-  const { buckets } = await res.json();
-  const exists = buckets.some(b => b.name === 'instagram-assets');
-  if (exists) {
-    console.log('[Publish] Bucket instagram-assets sudah ada');
-    return;
+  try {
+    const listUrl = `${config.SUPABASE_URL}/storage/v1/bucket`;
+    const res = await fetch(listUrl, {
+      headers: { 'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY}` },
+    });
+    const data = await res.json();
+    const buckets = data.buckets || data.items || [];
+    const exists = buckets.some(b => b.name === 'instagram-assets');
+    if (exists) {
+      console.log('[Publish] Bucket instagram-assets sudah ada');
+      return;
+    }
+  } catch (e) {
+    console.warn('[Publish] Gagal cek bucket, coba upload langsung:', e.message);
   }
 
   console.log('[Publish] Creating instagram-assets bucket...');
-  const createRes = await fetch(listUrl, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      id: 'instagram-assets',
-      name: 'instagram-assets',
-      public: true,
-      fileSizeLimit: 10 * 1024 * 1024,
-      allowedMimeTypes: ['image/png', 'image/jpeg', 'image/jpg', 'video/mp4'],
-    }),
-  });
-  const createData = await createRes.json();
-  console.log('[Publish] Bucket create result:', JSON.stringify(createData));
+  try {
+    const createRes = await fetch(`${config.SUPABASE_URL}/storage/v1/bucket`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${config.SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        id: 'instagram-assets',
+        name: 'instagram-assets',
+        public: true,
+        fileSizeLimit: 10 * 1024 * 1024,
+        allowedMimeTypes: ['image/png', 'image/jpeg', 'image/jpg', 'video/mp4'],
+      }),
+    });
+    const createData = await createRes.json();
+    console.log('[Publish] Bucket create result:', JSON.stringify(createData));
+  } catch (e) {
+    console.warn('[Publish] Gagal create bucket (mungkin sudah ada):', e.message);
+  }
 }
 
 let bucketReady = false;
