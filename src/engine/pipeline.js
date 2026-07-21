@@ -110,9 +110,9 @@ export async function continueAfterScriptApproval(pipeline) {
   try {
     // 1. Validate script quality
     const scriptValidation = await validateScript(pipeline.script_content);
-    logger.info(`[Pipeline] Script validation: ${scriptValidation.score} (${scriptValidation.passed ? 'PASS' : 'FAIL'})`);
+    logger.info(`[Pipeline] Script validation: ${scriptValidation.score} (${scriptValidation.valid ? 'PASS' : 'FAIL'})`);
     
-    if (!scriptValidation.passed && scriptValidation.score < 0.5) {
+    if (!scriptValidation.valid && scriptValidation.score < 0.5) {
       logger.warn(`[Pipeline] Script too weak (${scriptValidation.score}), regenerating...`);
       const newScript = await runScriptAgent(pipeline);
       await updatePipelineStatus(pipeline.id, PIPELINE_STATUS.SCRIPT_APPROVED, {
@@ -131,7 +131,7 @@ export async function continueAfterScriptApproval(pipeline) {
     logger.info(`[Pipeline] Optimized prompt ready: ${(optimizedPrompt.prompt || '').substring(0, 50)}...`);
 
     // 4. Generate image with optimized prompt
-    const imageResult = await runImageAgent(pipeline, optimizedPrompt.prompt);
+    const imageResult = await runImageAgent(pipeline, optimizedPrompt);
 
     if (imageResult.type === 'awaiting_real_photo') {
       await updatePipelineStatus(pipeline.id, PIPELINE_STATUS.AWAITING_ASSET);
@@ -148,7 +148,7 @@ export async function continueAfterScriptApproval(pipeline) {
       logger.warn(`[Pipeline] Image quality low (${qualityAssessment.score}), attempting auto-regenerate...`);
       // Auto-regenerate: callback to generate new image
       const regenerateImage = async () => {
-        const newResult = await runImageAgent(pipeline, optimizedPrompt.prompt);
+        const newResult = await runImageAgent(pipeline, optimizedPrompt);
         return newResult.filepath;
       };
       finalImage = await autoRegenerateIfNeeded(
@@ -163,7 +163,7 @@ export async function continueAfterScriptApproval(pipeline) {
     const isDuplicate = await checkDuplicate(finalImage.filepath);
     if (isDuplicate) {
       logger.warn('[Pipeline] Image is duplicate, regenerating...');
-      const newImage = await runImageAgent(pipeline, optimizedPrompt.prompt);
+      const newImage = await runImageAgent(pipeline, optimizedPrompt);
       if (newImage.type !== 'awaiting_real_photo') {
         finalImage = newImage;
       }
@@ -173,11 +173,18 @@ export async function continueAfterScriptApproval(pipeline) {
     await storeImageHash(finalImage.filepath, pipeline.id);
 
     // 8. Generate caption
-    const captionResult = await runCaptionAgent(pipeline, pipeline.script_content);
+    let captionResult = await runCaptionAgent(pipeline, pipeline.script_content);
 
-    // 9. Validate caption
-    const captionValidation = await validateCaption(captionResult);
+    // 9. Validate caption — auto-regenerate once if score < 0.5
+    let captionValidation = await validateCaption(captionResult);
     logger.info(`[Pipeline] Caption validation: ${captionValidation.score} (${captionValidation.valid ? 'PASS' : 'FAIL'})`);
+    
+    if (!captionValidation.valid && captionValidation.score < 0.5) {
+      logger.warn(`[Pipeline] Caption too weak (${captionValidation.score}), regenerating once...`);
+      captionResult = await runCaptionAgent(pipeline, pipeline.script_content);
+      captionValidation = await validateCaption(captionResult);
+      logger.info(`[Pipeline] Caption re-validation: ${captionValidation.score}`);
+    }
 
     await updatePipelineStatus(pipeline.id, PIPELINE_STATUS.AWAITING_FINAL_APPROVAL, {
       asset_url: finalImage.filepath || finalImage.url,
@@ -282,7 +289,7 @@ export async function autoPipelineToEnd(pipeline) {
   const optimizedPrompt = promptOptResult.optimized;
 
   // 2. Generate image with optimized prompt
-  const imageResult = await runImageAgent(fresh, optimizedPrompt.prompt);
+  const imageResult = await runImageAgent(fresh, optimizedPrompt);
 
   // Kalo butuh real photo tapi di auto mode, fallback pake AI
   if (imageResult.type === 'awaiting_real_photo') {
@@ -302,7 +309,7 @@ export async function autoPipelineToEnd(pipeline) {
   const qualityAssessment = qualityResult.assessment;
   if (qualityAssessment.score < 0.7) {
     const regenerateImage = async () => {
-      const newResult = await runImageAgent(fresh, optimizedPrompt.prompt);
+      const newResult = await runImageAgent(fresh, optimizedPrompt);
       return newResult.filepath;
     };
     finalImage = await autoRegenerateIfNeeded(qualityResult, imageBrief, regenerateImage, 3);
@@ -311,17 +318,24 @@ export async function autoPipelineToEnd(pipeline) {
   // 4. Duplicate check
   const isDuplicate = await checkDuplicate(finalImage.filepath);
   if (isDuplicate) {
-    const newImage = await runImageAgent(fresh, optimizedPrompt.prompt);
+    const newImage = await runImageAgent(fresh, optimizedPrompt);
     if (newImage.type !== 'awaiting_real_photo') finalImage = newImage;
   }
   await storeImageHash(finalImage.filepath, fresh.id);
 
   // 5. Generate caption
-  const captionResult = await runCaptionAgent(fresh, fresh.script_content);
+  let captionResult = await runCaptionAgent(fresh, fresh.script_content);
 
-  // 6. Validate caption
-  const captionValidation = await validateCaption(captionResult);
+  // 6. Validate caption — auto-regenerate once if score < 0.5
+  let captionValidation = await validateCaption(captionResult);
   logger.info(`[Auto] Caption validation: ${captionValidation.score}`);
+  
+  if (!captionValidation.valid && captionValidation.score < 0.5) {
+    logger.warn(`[Auto] Caption too weak (${captionValidation.score}), regenerating once...`);
+    captionResult = await runCaptionAgent(fresh, fresh.script_content);
+    captionValidation = await validateCaption(captionResult);
+    logger.info(`[Auto] Caption re-validation: ${captionValidation.score}`);
+  }
 
   // Langsung publish
   await updatePipelineStatus(fresh.id, PIPELINE_STATUS.AWAITING_FINAL_APPROVAL, {

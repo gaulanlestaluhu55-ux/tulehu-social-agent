@@ -12,6 +12,10 @@ STYLE GUIDE:
 BRAND CONTEXT (patuhi brand voice & CTA philosophy):
 {brand_context}
 
+PELAJARI DARI PENGALAMAN SEBELUMNYA:
+{learnings}
+Pertimbangkan learnings di atas saat menulis — jika ada insight yang relevan dengan pilar ini, terapkan; kalau tidak ada learnings, tulis seperti biasa.
+
 OUTPUT FORMAT (JSON):
 {
   "caption": "teks caption final",

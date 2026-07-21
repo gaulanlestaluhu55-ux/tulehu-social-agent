@@ -244,29 +244,29 @@ export function createBot() {
 
   // ─── Message handlers ──────
 
-  // Route tombol keyboard tetap
-  const keyboardActions = {
-    '🚀 Run': () => handleStartPipeline(ctx),
-    '📊 Status': () => handleStatus(ctx),
-    '📅 Jadwal': () => handleSchedule(ctx),
-    '📈 Analysis': () => handleAnalysis(ctx),
-    '💬 Komentar': () => handleComments(ctx),
-    '📨 Inbox': () => handleInbox(ctx),
-    '📚 Learnings': async () => {
-      const { getActiveLearnings } = await import('../db/supabase.js');
-      const learnings = await getActiveLearnings();
-      if (learnings.length === 0) return ctx.reply('Belum ada learnings bro.');
-      const msg = learnings.slice(0, 5).map((l, i) =>
-        `${i + 1}. ${l.insight_summary} (${l.confidence})`
-      ).join('\n');
-      await ctx.reply(`📚 Learnings:\n${msg}`);
-    },
-    '📸 Quick Post': () => ctx.reply('📸 Kirim foto produk lo, gue bikin caption + hashtag siap posting.'),
-  };
-
   bot.on('message:text', async (ctx) => {
     const text = ctx.message.text;
     const parsed = parseReply(text);
+
+    // Route tombol keyboard tetap (定义在 handler 内部 supaya ctx bisa diakses)
+    const keyboardActions = {
+      '🚀 Run': () => handleStartPipeline(ctx),
+      '📊 Status': () => handleStatus(ctx),
+      '📅 Jadwal': () => handleSchedule(ctx),
+      '📈 Analysis': () => handleAnalysis(ctx),
+      '💬 Komentar': () => handleComments(ctx),
+      '📨 Inbox': () => handleInbox(ctx),
+      '📚 Learnings': async () => {
+        const { getActiveLearnings } = await import('../db/supabase.js');
+        const learnings = await getActiveLearnings();
+        if (learnings.length === 0) return ctx.reply('Belum ada learnings bro.');
+        const msg = learnings.slice(0, 5).map((l, i) =>
+          `${i + 1}. ${l.insight_summary} (${l.confidence})`
+        ).join('\n');
+        await ctx.reply(`📚 Learnings:\n${msg}`);
+      },
+      '📸 Quick Post': () => ctx.reply('📸 Kirim foto produk lo, gue bikin caption + hashtag siap posting.'),
+    };
 
     // Fast path: tombol keyboard tetap
     if (keyboardActions[text]) {

@@ -1,6 +1,6 @@
 import { callWithFailover } from '../llm/client.js';
 import { withRetry } from '../engine/retry.js';
-import { updatePipelineStatus, logAgentAction } from '../db/supabase.js';
+import { updatePipelineStatus, logAgentAction, getActiveLearnings } from '../db/supabase.js';
 import { agentProviders, PIPELINE_STATUS } from '../config.js';
 import fs from 'fs';
 import path from 'path';
@@ -13,6 +13,13 @@ const systemPrompt = fs.readFileSync(path.join(__dirname, '../templates/prompts/
 export async function runScriptAgent(pipeline) {
   console.log('[Script Agent] Menulis naskah konten...');
 
+  const learnings = await getActiveLearnings(pipeline.pillar_name);
+  const learningsText = learnings.length
+    ? learnings.map(l => `- ${l.insight_summary} (confidence: ${l.confidence})`).join('\n')
+    : 'Belum ada learning';
+
+  const prompt = systemPrompt.replace('{learnings}', learningsText);
+
   const userPrompt = `Buatkan naskah untuk ide konten ini:
 - Judul: ${pipeline.idea_content.angle}
 - Deskripsi: ${pipeline.idea_content.description}
@@ -22,7 +29,7 @@ export async function runScriptAgent(pipeline) {
   const startTime = Date.now();
   const result = await withRetry(async () => {
     return await callWithFailover(agentProviders.script, [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: prompt },
       { role: 'user', content: userPrompt },
     ], { temperature: 0.7 });
   }, 'script');

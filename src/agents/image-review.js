@@ -112,25 +112,46 @@ Return quality assessment JSON.`;
 }
 
 export async function autoRegenerateIfNeeded(imageResult, imageBrief, generateFn, maxAttempts = 3) {
-  const assessment = imageResult.assessment || { score: 0.7 };
   let currentPath = imageResult.filepath;
+  let currentAssessment = imageResult.assessment || { score: 0.7 };
+  
+  // Track best result across all attempts
+  let bestPath = currentPath;
+  let bestScore = currentAssessment.score;
 
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    console.log(`[Image Review] Attempt ${attempt}/${maxAttempts}`);
+    console.log(`[Image Review] Attempt ${attempt}/${maxAttempts} — current score: ${currentAssessment.score}`);
 
-    if (assessment.score >= 0.7) {
-      console.log(`[Image Review] Image accepted (score: ${assessment.score})`);
-      return { success: true, assessment, attempts: attempt, filepath: currentPath };
+    if (currentAssessment.score >= 0.7) {
+      console.log(`[Image Review] Image accepted (score: ${currentAssessment.score})`);
+      return { success: true, assessment: currentAssessment, attempts: attempt, filepath: currentPath };
     }
 
     if (attempt < maxAttempts) {
-      console.log(`[Image Review] Image rejected (score: ${assessment.score}), regenerating...`);
+      console.log(`[Image Review] Image rejected (score: ${currentAssessment.score}), regenerating...`);
       const newPath = await generateFn();
-      if (newPath) currentPath = newPath;
+      if (newPath) {
+        currentPath = newPath;
+        // Re-check score for the new image
+        const recheckResult = await runImageQualityChecker(currentPath, imageBrief);
+        currentAssessment = recheckResult.assessment;
+        console.log(`[Image Review] New image score: ${currentAssessment.score}`);
+        
+        // Track best result
+        if (currentAssessment.score > bestScore) {
+          bestScore = currentAssessment.score;
+          bestPath = currentPath;
+        }
+      }
     }
   }
 
-  console.log(`[Image Review] All ${maxAttempts} attempts exhausted, using last image`);
-  const finalResult = await runImageQualityChecker(currentPath, imageBrief);
-  return { success: false, assessment: finalResult.assessment, attempts: maxAttempts, filepath: currentPath };
+  // Return best image (not necessarily the last one)
+  console.log(`[Image Review] All ${maxAttempts} attempts exhausted. Best score: ${bestScore}`);
+  return { 
+    success: bestScore >= 0.7, 
+    assessment: { score: bestScore }, 
+    attempts: maxAttempts, 
+    filepath: bestPath 
+  };
 }

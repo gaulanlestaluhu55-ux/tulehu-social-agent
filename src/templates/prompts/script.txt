@@ -9,6 +9,10 @@ CTA: ajakan chat WA, DM, atau link bio.
 BRAND CONTEXT (patuhi semua aturan ini, terutama CTA philosophy dan truth guard):
 {brand_context}
 
+PELAJARI DARI PENGALAMAN SEBELUMNYA:
+{learnings}
+Pertimbangkan learnings di atas saat menulis — jika ada insight yang relevan dengan pilar ini, terapkan; kalau tidak ada learnings, tulis seperti biasa.
+
 OUTPUT FORMAT (JSON):
 {
   "hook": "hook konten",

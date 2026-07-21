@@ -10,14 +10,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const brandVisualContext = fs.readFileSync(path.join(__dirname, '../templates/brand-context.txt'), 'utf-8')
   .split('\n').filter(l => l.match(/VISUAL|MOCKUP|AI|GAMBAR|FOTO|AI-GENERATED/i)).join('\n') || 'Prioritas visual: 1) Foto asli hasil produksi, 2) Foto proses, 3) Mockup, 4) AI hanya untuk edukasi. Jangan gunakan AI yang bisa disangka hasil produksi asli. Jangan tambah logo ke desain customer.';
 
-async function generateWithCloudflare(prompt) {
+async function generateWithCloudflare(prompt, options = {}) {
   const url = `https://api.cloudflare.com/client/v4/accounts/${config.CLOUDFLARE_ACCOUNT_ID}/ai/run/${config.CLOUDFLARE_AI_MODEL}`;
 
   const response = await axios.post(url, {
     prompt: `${prompt}\n\nCatatan brand: ${brandVisualContext}`,
-    negative_prompt: 'nsfw, low quality, blurry, distorted, text, watermark',
-    num_steps: 20,
-    guidance: 7.5,
+    negative_prompt: options.negative_prompt || 'nsfw, low quality, blurry, distorted, text, watermark, extra fingers, bad anatomy',
+    num_steps: options.steps || 20,
+    guidance: options.cfg || 7.5,
   }, {
     headers: {
       'Authorization': `Bearer ${config.CLOUDFLARE_API_TOKEN}`,
@@ -41,12 +41,26 @@ export async function runImageAgent(pipeline, optimizedPrompt = null) {
 
   await updatePipelineStatus(pipeline.id, PIPELINE_STATUS.GENERATING_ASSET);
   
-  // Use optimized prompt if provided, otherwise fallback to visual_notes
-  const visualPrompt = optimizedPrompt || pipeline.script_content?.visual_notes || pipeline.idea_content?.description || 'Custom t-shirt design, Indonesian context';
+  // Extract prompt string and options from optimizedPrompt object
+  let visualPrompt;
+  let imageOptions = {};
+  
+  if (optimizedPrompt && typeof optimizedPrompt === 'object') {
+    visualPrompt = optimizedPrompt.prompt || pipeline.script_content?.visual_notes || pipeline.idea_content?.description || 'Custom t-shirt design, Indonesian context';
+    imageOptions = {
+      negative_prompt: optimizedPrompt.negative_prompt,
+      steps: optimizedPrompt.steps,
+      cfg: optimizedPrompt.cfg,
+    };
+  } else if (typeof optimizedPrompt === 'string') {
+    visualPrompt = optimizedPrompt;
+  } else {
+    visualPrompt = pipeline.script_content?.visual_notes || pipeline.idea_content?.description || 'Custom t-shirt design, Indonesian context';
+  }
 
   const startTime = Date.now();
   const imageBuffer = await withRetry(async () => {
-    return await generateWithCloudflare(visualPrompt);
+    return await generateWithCloudflare(visualPrompt, imageOptions);
   }, 'image');
 
   const filename = `ig_${pipeline.id}_${Date.now()}.png`;

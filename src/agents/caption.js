@@ -1,6 +1,6 @@
 import { callWithFailover } from '../llm/client.js';
 import { withRetry } from '../engine/retry.js';
-import { updatePipelineStatus, logAgentAction } from '../db/supabase.js';
+import { updatePipelineStatus, logAgentAction, getActiveLearnings } from '../db/supabase.js';
 import { agentProviders } from '../config.js';
 import fs from 'fs';
 import path from 'path';
@@ -13,6 +13,13 @@ const systemPrompt = fs.readFileSync(path.join(__dirname, '../templates/prompts/
 export async function runCaptionAgent(pipeline, scriptContent) {
   console.log('[Caption Agent] Menulis caption & hashtag...');
 
+  const learnings = await getActiveLearnings(pipeline.pillar_name);
+  const learningsText = learnings.length
+    ? learnings.map(l => `- ${l.insight_summary} (confidence: ${l.confidence})`).join('\n')
+    : 'Belum ada learning';
+
+  const prompt = systemPrompt.replace('{learnings}', learningsText);
+
   const userPrompt = `Buat caption untuk konten ini:
 - Pilar: ${pipeline.pillar_name}
 - Hook: ${scriptContent.hook}
@@ -22,7 +29,7 @@ export async function runCaptionAgent(pipeline, scriptContent) {
   const startTime = Date.now();
   const result = await withRetry(async () => {
     return await callWithFailover(agentProviders.caption, [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: prompt },
       { role: 'user', content: userPrompt },
     ], { temperature: 0.6 });
   }, 'caption');
