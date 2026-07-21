@@ -7,6 +7,11 @@ import { runImageAgent } from './image.js';
 import { runCaptionAgent } from './caption.js';
 import { runAnalysisAgent } from './analysis.js';
 import { runPublishAgent } from './publish.js';
+import { runImageBriefAgent } from './image-brief.js';
+import { runPromptOptimizer } from './prompt-optimizer.js';
+import { runImageQualityChecker, autoRegenerateIfNeeded } from './image-review.js';
+import { checkDuplicate, storeImageHash } from '../utils/dedup.js';
+import { validateScript, validateCaption } from './validator.js';
 import { callWithFailover, multimodalText } from '../llm/client.js';
 import { escapeMarkdown } from '../utils/helpers.js';
 import { compressForTelegram } from '../utils/image.js';
@@ -314,6 +319,8 @@ export async function handleApprove(ctx, today) {
         await ctx.reply(templates.requestPhotoTemplate(result.pipeline), { parse_mode: 'Markdown' });
       } else if (result.status === PIPELINE_STATUS.AWAITING_FINAL_APPROVAL) {
         const caption = result.pipeline.caption_content || '';
+        
+        // Kirim foto preview
         if (result.imageResult?.filepath) {
           try {
             const { buffer } = await compressForTelegram(result.imageResult.filepath);
@@ -322,6 +329,22 @@ export async function handleApprove(ctx, today) {
             console.warn('[Pipeline] Gagal kirim preview foto:', e.message);
           }
         }
+        
+        // Kirim info image brief + quality score
+        let infoMsg = `📊 *Asset Info*\n`;
+        if (result.imageBrief) {
+          infoMsg += `*Style:* ${escapeMarkdown(result.imageBrief.style || '-')}\n`;
+          infoMsg += `*Mood:* ${escapeMarkdown(result.imageBrief.mood || '-')}\n`;
+        }
+        if (result.qualityScore !== undefined) {
+          const scoreEmoji = result.qualityScore >= 0.8 ? '🟢' : result.qualityScore >= 0.6 ? '🟡' : '🔴';
+          infoMsg += `*Quality:* ${scoreEmoji} ${(result.qualityScore * 100).toFixed(0)}%\n`;
+        }
+        if (result.optimizedPrompt) {
+          infoMsg += `*Prompt:* ${escapeMarkdown(result.optimizedPrompt.prompt?.substring(0, 100) || '-')}...\n`;
+        }
+        await ctx.reply(infoMsg, { parse_mode: 'Markdown' });
+        
         await ctx.reply(templates.finalApprovalTemplate(result.pipeline, caption), { parse_mode: 'Markdown' });
       }
     } catch (err) {
@@ -372,22 +395,66 @@ export async function handleRevise(ctx, today, note) {
     });
 
     try {
-      const [imageResult, captionResult] = await Promise.all([
-        runImageAgent(freshPipeline),
-        runCaptionAgent(freshPipeline, freshPipeline.script_content),
-      ]);
+      // 1. Image Brief + Prompt Optimizer
+      const imageBrief = await runImageBriefAgent(freshPipeline, freshPipeline.script_content);
+      const optimizedPrompt = await runPromptOptimizer(imageBrief);
 
-      await updatePipelineStatus(today.id, PIPELINE_STATUS.AWAITING_FINAL_APPROVAL);
+      // 2. Generate image with optimized prompt
+      const imageResult = await runImageAgent(freshPipeline, optimizedPrompt.prompt);
 
-      if (imageResult.type === 'ai_generated' && imageResult.filepath) {
+      if (imageResult.type === 'awaiting_real_photo') {
+        await updatePipelineStatus(today.id, PIPELINE_STATUS.AWAITING_ASSET);
+        await ctx.reply(templates.requestPhotoTemplate(freshPipeline), { parse_mode: 'Markdown' });
+        return;
+      }
+
+      // 3. Quality check + auto-regenerate
+      let finalImage = imageResult;
+      const qualityResult = await runImageQualityChecker(imageResult.filepath, freshPipeline.script_content);
+      if (!qualityResult.passed) {
+        finalImage = await autoRegenerateIfNeeded(qualityResult, imageBrief, freshPipeline.script_content, 3);
+      }
+
+      // 4. Duplicate check
+      const isDuplicate = await checkDuplicate(finalImage.filepath);
+      if (isDuplicate) {
+        const newImage = await runImageAgent(freshPipeline, optimizedPrompt.prompt);
+        if (newImage.type !== 'awaiting_real_photo') finalImage = newImage;
+      }
+      await storeImageHash(finalImage.filepath, freshPipeline.id);
+
+      // 5. Generate caption
+      const captionResult = await runCaptionAgent(freshPipeline, freshPipeline.script_content);
+
+      await updatePipelineStatus(today.id, PIPELINE_STATUS.AWAITING_FINAL_APPROVAL, {
+        asset_url: finalImage.filepath || finalImage.url,
+        caption_content: captionResult.caption_content,
+      });
+
+      // Send preview
+      if (finalImage.type === 'ai_generated' && finalImage.filepath) {
         try {
-          const { buffer } = await compressForTelegram(imageResult.filepath);
-          await ctx.replyWithPhoto({ source: buffer, filename: path.basename(imageResult.filepath) });
+          const { buffer } = await compressForTelegram(finalImage.filepath);
+          await ctx.replyWithPhoto({ source: buffer, filename: path.basename(finalImage.filepath) });
         } catch (e) {
           console.warn('[Pipeline] Gagal kirim revisi foto:', e.message);
         }
       }
-      await ctx.reply(templates.finalApprovalTemplate(freshPipeline, freshPipeline.caption_content || ''), { parse_mode: 'Markdown' });
+
+      // Send quality info
+      let infoMsg = `📊 *Asset Info (Revisi)*\n`;
+      if (imageBrief) {
+        infoMsg += `*Style:* ${escapeMarkdown(imageBrief.style || '-')}\n`;
+        infoMsg += `*Mood:* ${escapeMarkdown(imageBrief.mood || '-')}\n`;
+      }
+      if (qualityResult.score !== undefined) {
+        const scoreEmoji = qualityResult.score >= 0.8 ? '🟢' : qualityResult.score >= 0.6 ? '🟡' : '🔴';
+        infoMsg += `*Quality:* ${scoreEmoji} ${(qualityResult.score * 100).toFixed(0)}%\n`;
+      }
+      await ctx.reply(infoMsg, { parse_mode: 'Markdown' });
+
+      const freshPipeline2 = await supabase.from('content_pipeline').select('*').eq('id', today.id).single().then(r => r.data);
+      await ctx.reply(templates.finalApprovalTemplate(freshPipeline2, freshPipeline2.caption_content || ''), { parse_mode: 'Markdown' });
     } catch (err) {
       await ctx.reply(templates.errorTemplate(err.message), { parse_mode: 'Markdown' });
     }
