@@ -44,8 +44,9 @@ export default function SlotPage({ params }) {
       const opts = { method, headers: { 'Content-Type': 'application/json' } };
       if (body) opts.body = JSON.stringify(body);
       const res = await fetch(url, opts);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data?.error || 'Request failed');
+      let data;
+      try { data = await res.json(); } catch { data = null; }
+      if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`);
       return data;
     } finally {
       setLoading(l => ({ ...l, [url]: false }));
@@ -181,7 +182,7 @@ export default function SlotPage({ params }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <h3>2. Script</h3>
           {slot.status === 'draft' || slot.status === 'idea_ready' ? (
-            <button className="btn btn-primary" onClick={generateScript} disabled={loading.script || !slot.idea_selected_index && slot.idea_selected_index !== 0}>
+            <button className="btn btn-primary" onClick={generateScript} disabled={loading.script || slot.idea_selected_index === null || slot.idea_selected_index === undefined}>
               {loading.script ? 'Generating...' : 'Generate Script'}
             </button>
           ) : editScript ? (

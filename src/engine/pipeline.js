@@ -81,6 +81,7 @@ export async function selectIdea(pipelineId, selectedIndex) {
 export async function generateScriptForSlot(pipelineId) {
   const pipeline = await getPipelineById(pipelineId);
   if (!pipeline) throw new Error(`Pipeline ${pipelineId} not found`);
+  if (!pipeline.idea_content) throw new Error('Pilih ide terlebih dahulu sebelum generate script');
 
   logger.info(`[Pipeline] Generating script for slot ${pipelineId}...`);
 
@@ -121,6 +122,7 @@ export async function updateScript(pipelineId, editedScript) {
 export async function generateVisualBrief(pipelineId) {
   const pipeline = await getPipelineById(pipelineId);
   if (!pipeline) throw new Error(`Pipeline ${pipelineId} not found`);
+  if (!pipeline.script_content) throw new Error('Generate script terlebih dahulu');
 
   logger.info(`[Pipeline] Generating visual brief for slot ${pipelineId}...`);
 
