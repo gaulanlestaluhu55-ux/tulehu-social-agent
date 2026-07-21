@@ -93,7 +93,9 @@ export default function SlotPage({ params }) {
       formData.append('file', file);
       if (slideIndex !== null) formData.append('slideIndex', slideIndex);
       const res = await fetch(`/api/slots/${id}/visual`, { method: 'POST', body: formData });
-      if (!res.ok) throw new Error('Upload failed');
+      let data;
+      try { data = await res.json(); } catch { data = null; }
+      if (!res.ok) throw new Error(data?.error || `Upload failed (${res.status})`);
       loadSlot();
     } finally {
       setLoading(l => ({ ...l, [key]: false }));
