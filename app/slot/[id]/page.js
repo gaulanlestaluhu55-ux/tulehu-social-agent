@@ -45,7 +45,7 @@ export default function SlotPage({ params }) {
       if (body) opts.body = JSON.stringify(body);
       const res = await fetch(url, opts);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Request failed');
+      if (!res.ok) throw new Error(data?.error || 'Request failed');
       return data;
     } finally {
       setLoading(l => ({ ...l, [url]: false }));
