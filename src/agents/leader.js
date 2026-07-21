@@ -1,26 +1,13 @@
-import { PIPELINE_STATUS, agentProviders, config } from '../config.js';
-import { startPipeline, resumePipeline, continueAfterScriptApproval, publishFinal } from '../engine/pipeline.js';
-import { checkCutoff } from '../engine/fallback.js';
-import { supabase, getActivePipelines, updatePipelineStatus, saveConversationMessage, getRecentConversation, getActiveLearnings } from '../db/supabase.js';
-import { runScriptAgent } from './script.js';
-import { runImageAgent } from './image.js';
-import { runCaptionAgent } from './caption.js';
+import { agentProviders, config } from '../config.js';
+import { supabase, saveConversationMessage, getRecentConversation, getActiveLearnings } from '../db/supabase.js';
 import { runAnalysisAgent } from './analysis.js';
-import { runPublishAgent } from './publish.js';
-import { runImageBriefAgent } from './image-brief.js';
-import { runPromptOptimizer } from './prompt-optimizer.js';
-import { runImageQualityChecker, autoRegenerateIfNeeded } from './image-review.js';
-import { checkDuplicate, storeImageHash } from '../utils/dedup.js';
-import { validateScript, validateCaption } from './validator.js';
 import { callWithFailover, multimodalText } from '../llm/client.js';
 import { escapeMarkdown } from '../utils/helpers.js';
-import { compressForTelegram } from '../utils/image.js';
 import { needsVisualRecheck } from '../utils/quickpost.js';
-import * as templates from '../telegram/templates.js';
 import {
   getComments, replyToComment, scoreCommentQuality,
   getConversations, sendMessage,
-  getMedia, archiveMedia, deleteMedia,
+  archiveMedia, deleteMedia,
   getPages,
   getAdAccounts, getCampaigns,
 } from '../platforms/instagram.js';
@@ -48,90 +35,19 @@ async function gatherContext() {
   const dateStr = now.toISOString().split('T')[0];
   const dayNames = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
-  let pipelineStatus = 'Belum ada pipeline untuk hari ini';
-  let todayPillar = '-';
-
+  let upcomingCount = 0;
   try {
-    const { data: todayPipeline } = await supabase
-      .from('content_pipeline')
-      .select('*')
-      .eq('calendar_date', dateStr)
-      .limit(1)
-      .maybeSingle();
-
-    if (todayPipeline) {
-      pipelineStatus = todayPipeline.status.replace(/_/g, ' ');
-      todayPillar = todayPipeline.pillar_name;
-    } else {
-      const dayOfWeek = now.getDay();
-      const { data: pillar } = await supabase
-        .from('content_calendar')
-        .select('pillar_name, needs_real_photo')
-        .eq('day_of_week', dayOfWeek)
-        .eq('is_active', true)
-        .limit(1)
-        .maybeSingle();
-      if (pillar) todayPillar = pillar.pillar_name;
-    }
+    const { count } = await supabase
+      .from('publish_queue')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending');
+    upcomingCount = count || 0;
   } catch {}
 
-  const active = await getActivePipelines().catch(() => []);
-
-  const cronSchedule = {
-    '0 9 * * *': 'Setiap hari jam 9:00 WIT',
-    '0 20 * * 0': 'Setiap Minggu jam 20:00 WIT (analisis mingguan)',
-  };
-
   return {
-    pipeline_status: pipelineStatus,
-    today_pillar: todayPillar,
-    pending_count: active.length,
+    upcoming_count: upcomingCount,
     current_time: `${dayNames[now.getDay()]}, ${now.toLocaleDateString('id-ID', { year: 'numeric', month: 'long', day: 'numeric' })} ${now.toLocaleTimeString('id-ID')} WIT`,
-    cron_schedule: cronSchedule[config.DAILY_PUBLISH_CRON] || `Cron: ${config.DAILY_PUBLISH_CRON}`,
   };
-}
-
-function parseActionFromResponse(text) {
-  const match = text.match(/ACTION:\s*(\w+)/i);
-  if (!match) return null;
-  return match[1].toLowerCase();
-}
-
-async function executeAction(ctx, action) {
-  try {
-    switch (action) {
-      case 'run_pipeline':
-        await handleStartPipeline(ctx);
-        break;
-      case 'show_status':
-        await handleStatus(ctx);
-        break;
-      case 'show_schedule':
-        await handleSchedule(ctx);
-        break;
-      case 'run_analysis':
-        await handleAnalysis(ctx);
-        break;
-      case 'show_learnings': {
-        const { getActiveLearnings } = await import('../db/supabase.js');
-        const learnings = await getActiveLearnings();
-        if (learnings.length === 0) {
-          await ctx.reply('Belum ada learnings bro.');
-        } else {
-          const msg = learnings.slice(0, 5).map((l, i) =>
-            `${i + 1}. ${l.insight_summary} (${l.confidence})`
-          ).join('\n');
-          await ctx.reply(`📚 Learnings:\n${msg}`);
-        }
-        break;
-      }
-      default:
-        // skip unknown actions
-        break;
-    }
-  } catch (err) {
-    console.error(`[Leader] Action ${action} error:`, err.message);
-  }
 }
 
 export async function handleConversation(ctx, messageText) {
@@ -139,22 +55,16 @@ export async function handleConversation(ctx, messageText) {
     const chatId = String(ctx.chat?.id || 'default');
     const context = await gatherContext();
 
-    // Simpan pesan user ke DB
     await saveConversationMessage(chatId, 'user', messageText, context);
-
-    // Ambil history terakhir dari DB
     const history = await getRecentConversation(chatId, MAX_HISTORY);
-    const contextSnapshot = { pipeline_status: context.pipeline_status, today_pillar: context.today_pillar, pending_count: context.pending_count, current_time: context.current_time, cron_schedule: context.cron_schedule };
 
-    // Bangun system prompt
     const systemContent = leaderSystemPrompt
-      .replace('{pipeline_status}', context.pipeline_status)
-      .replace('{today_pillar}', context.today_pillar)
-      .replace('{pending_count}', String(context.pending_count))
-      .replace('{cron_schedule}', context.cron_schedule)
+      .replace('{pipeline_status}', `Upcoming scheduled: ${context.upcoming_count}`)
+      .replace('{today_pillar}', '-')
+      .replace('{pending_count}', String(context.upcoming_count))
+      .replace('{cron_schedule}', 'Publisher cron tiap 5 menit')
       .replace('{current_time}', context.current_time);
 
-    // Kirim history ke LLM
     const messages = [
       { role: 'system', content: systemContent },
       ...history.map(m => ({
@@ -163,9 +73,8 @@ export async function handleConversation(ctx, messageText) {
       })),
     ];
 
-    // Ambil learnings aktif buat konteks tambahan
     try {
-      const learnings = await getActiveLearnings(context.today_pillar || undefined);
+      const learnings = await getActiveLearnings();
       if (learnings.length > 0) {
         const lrnText = learnings.slice(0, 5).map(l => `- ${l.insight_summary}`).join('\n');
         messages.push({ role: 'system', content: `Pelajaran dari pengalaman sebelumnya:\n${lrnText}` });
@@ -173,126 +82,76 @@ export async function handleConversation(ctx, messageText) {
     } catch {}
 
     const result = await callWithFailover(agentProviders.leader, messages, { temperature: 0.7, maxTokens: 1024 });
-
     const reply = result.content.replace(/ACTION:\s*\w+/gi, '').trim();
-    const action = parseActionFromResponse(result.content);
 
-    // Simpan balasan assistant ke DB
-    await saveConversationMessage(chatId, 'assistant', reply, contextSnapshot);
-
+    await saveConversationMessage(chatId, 'assistant', reply, context);
     await ctx.reply(reply || 'Siap bro!');
-
-    // Eksekusi action kalo ada
-    if (action) {
-      await executeAction(ctx, action);
-    }
   } catch (err) {
     await ctx.reply(`Maaf bro, gue lagi error nih: ${err.message}. Coba ulang ya.`);
   }
 }
 
-export async function handleStartPipeline(ctx) {
-  await ctx.reply('⏳ Memulai pipeline hari ini...');
-  try {
-    const result = await startPipeline();
-    if (result.status === PIPELINE_STATUS.AWAITING_SCRIPT_APPROVAL) {
-      await ctx.reply(templates.scriptApprovalTemplate(result.pipeline, result.scriptContent), { parse_mode: 'Markdown' });
-    } else if (result.status === PIPELINE_STATUS.PUBLISHED || result.igPostId) {
-      await ctx.reply(`ℹ️ Konten hari ini *udah dipublikasi* tadi.\n${result.permalink || ''}`, { parse_mode: 'Markdown' });
-    } else if (result.status === PIPELINE_STATUS.FAILED) {
-      await ctx.reply(`❌ Pipeline sebelumnya gagal, buat baru...`, { parse_mode: 'Markdown' });
-    }
-  } catch (err) {
-    await ctx.reply(`❌ Error: ${err.message}`);
-  }
-}
-
 export async function handleStatus(ctx) {
-  const pipelines = await getActivePipelines();
-  if (pipelines.length === 0) {
-    await ctx.reply('📭 Tidak ada pipeline aktif. Ketik /run untuk mulai.');
-    return;
-  }
-  for (const p of pipelines) {
-    await ctx.reply(templates.statusTemplate(p), { parse_mode: 'Markdown' });
+  try {
+    const { data: queue, error } = await supabase
+      .from('publish_queue')
+      .select('*')
+      .order('scheduled_at', { ascending: true })
+      .limit(10);
+
+    if (error) throw new Error(error.message);
+
+    if (!queue || queue.length === 0) {
+      await ctx.reply('📭 Tidak ada konten terjadwal.\n\nBuka dashboard untuk buat slot baru: /calendar');
+      return;
+    }
+
+    let msg = '📊 *Publish Queue*\n\n';
+    for (const item of queue) {
+      const scheduled = item.scheduled_at
+        ? new Date(item.scheduled_at).toLocaleString('id-ID', { timeZone: 'Asia/Jayapura' })
+        : '-';
+      const statusEmoji = { pending: '⏳', uploading: '📤', published: '✅', failed: '❌', retry: '🔄' }[item.status] || '❓';
+      msg += `${statusEmoji} *${item.platform}* — ${scheduled}\n`;
+      if (item.platform_permalink) {
+        msg += `   🔗 ${item.platform_permalink}\n`;
+      }
+    }
+    await ctx.reply(msg, { parse_mode: 'Markdown' });
+  } catch (err) {
+    await ctx.reply(`❌ Gagal ambil status: ${err.message}`);
   }
 }
 
 export async function handleSchedule(ctx) {
-  const { data } = await supabase
-    .from('content_calendar')
-    .select('*')
-    .eq('is_active', true)
-    .order('day_of_week');
-  await ctx.reply(templates.scheduleTemplate(data || []), { parse_mode: 'Markdown' });
-}
-
-export async function handlePause(ctx) {
-  await ctx.reply('⏸️ Pipeline di-pause. Pipeline akan tetap di status terakhir sampai di-resume.');
-}
-
-export async function handleResume(ctx) {
   try {
-    const pipelines = await getActivePipelines();
-    const paused = pipelines.find(p =>
-      [PIPELINE_STATUS.AWAITING_ASSET, PIPELINE_STATUS.AWAITING_FINAL_APPROVAL, PIPELINE_STATUS.APPROVED].includes(p.status)
-    );
+    const now = new Date();
+    const weekLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const from = now.toISOString().split('T')[0];
+    const to = weekLater.toISOString().split('T')[0];
 
-    if (!paused) {
-      await ctx.reply('📭 Tidak ada pipeline yang perlu di-resume.');
+    const { data: slots, error } = await supabase
+      .from('content_pipeline')
+      .select('id, calendar_date, pillar_name, status')
+      .gte('calendar_date', from)
+      .lte('calendar_date', to)
+      .order('calendar_date', { ascending: true });
+
+    if (error) throw new Error(error.message);
+
+    if (!slots || slots.length === 0) {
+      await ctx.reply('📅 Tidak ada slot konten minggu ini.\n\nBuka dashboard untuk buat slot: /calendar');
       return;
     }
 
-    const result = await resumePipeline(paused);
-
-    if (result.status === PIPELINE_STATUS.AWAITING_SCRIPT_APPROVAL) {
-      await ctx.reply(templates.scriptApprovalTemplate(result.pipeline, result.scriptContent), { parse_mode: 'Markdown' });
-    } else if (result.status === PIPELINE_STATUS.AWAITING_ASSET) {
-      await ctx.reply(templates.requestPhotoTemplate(result.pipeline), { parse_mode: 'Markdown' });
-    } else if (result.status === PIPELINE_STATUS.AWAITING_FINAL_APPROVAL) {
-      const caption = result.pipeline.caption_content || '';
-      await ctx.reply(templates.finalApprovalTemplate(result.pipeline, caption), { parse_mode: 'Markdown' });
-    } else if (result.permalink) {
-      await ctx.reply(templates.publishConfirmationTemplate(result), { parse_mode: 'Markdown' });
+    let msg = '📅 *Jadwal Minggu Ini*\n\n';
+    for (const s of slots) {
+      const statusEmoji = { draft: '📝', idea_ready: '💡', script_ready: '✍️', visual_uploaded: '🖼️', caption_ready: '📝', scheduled: '📅', published: '✅', failed: '❌' }[s.status] || '❓';
+      msg += `${statusEmoji} *${s.calendar_date}* — ${s.pillar_name} (${s.status})\n`;
     }
+    await ctx.reply(msg, { parse_mode: 'Markdown' });
   } catch (err) {
-    await ctx.reply(`❌ Resume error: ${err.message}`);
-  }
-}
-
-export async function handleSkip(ctx, today) {
-  if (today) {
-    await updatePipelineStatus(today.id, PIPELINE_STATUS.FAILED, { error_log: 'Skipped by Gaulan' });
-    await ctx.reply('⏭️ Konten hari ini di-skip.');
-  } else {
-    await ctx.reply('📭 Tidak ada konten hari ini untuk di-skip.');
-  }
-}
-
-export async function handleFallback(ctx, today) {
-  if (!today) {
-    await ctx.reply('📭 Tidak ada pipeline aktif.');
-    return;
-  }
-  if (today.status !== PIPELINE_STATUS.AWAITING_ASSET) {
-    await ctx.reply(`Pipeline saat ini status *${today.status}* — gak perlu fallback.`, { parse_mode: 'Markdown' });
-    return;
-  }
-  await ctx.reply('⏳ Beralih ke AI pillar...');
-  try {
-    today.recheckCount = 999;
-    const result = await checkCutoff(today, 999);
-    if (result.switched) {
-      await ctx.reply(`✅ Beralih ke: *${result.newPillar}*. Pipeline akan mulai ulang.`, { parse_mode: 'Markdown' });
-      const newResult = await startPipeline(new Date(today.calendar_date));
-      if (newResult.status === PIPELINE_STATUS.AWAITING_SCRIPT_APPROVAL) {
-        await ctx.reply(templates.scriptApprovalTemplate(newResult.pipeline, newResult.scriptContent), { parse_mode: 'Markdown' });
-      }
-    } else {
-      await ctx.reply('Gagal fallback: tidak ada pilar cadangan.');
-    }
-  } catch (err) {
-    await ctx.reply(`❌ Fallback error: ${err.message}`);
+    await ctx.reply(`❌ Gagal ambil jadwal: ${err.message}`);
   }
 }
 
@@ -305,226 +164,6 @@ export async function handleAnalysis(ctx) {
     await ctx.reply(`❌ Analysis error: ${err.message}`);
   }
 }
-
-export async function handleApprove(ctx, today) {
-  if (today.status === PIPELINE_STATUS.AWAITING_SCRIPT_APPROVAL) {
-    await updatePipelineStatus(today.id, PIPELINE_STATUS.SCRIPT_APPROVED);
-    await ctx.reply('✅ Naskah disetujui! Memproduksi asset...');
-
-    try {
-      const pipelineData = await supabase.from('content_pipeline').select('*').eq('id', today.id).single().then(r => r.data);
-      const result = await continueAfterScriptApproval(pipelineData);
-
-      if (result.status === PIPELINE_STATUS.AWAITING_ASSET) {
-        await ctx.reply(templates.requestPhotoTemplate(result.pipeline), { parse_mode: 'Markdown' });
-      } else if (result.status === PIPELINE_STATUS.AWAITING_FINAL_APPROVAL) {
-        const caption = result.pipeline.caption_content || '';
-        
-        // Kirim foto preview
-        if (result.imageResult?.filepath) {
-          try {
-            const { buffer } = await compressForTelegram(result.imageResult.filepath);
-            await ctx.replyWithPhoto({ source: buffer, filename: path.basename(result.imageResult.filepath) });
-          } catch (e) {
-            console.warn('[Pipeline] Gagal kirim preview foto:', e.message);
-          }
-        }
-        
-        // Kirim info image brief + quality score
-        let infoMsg = `📊 *Asset Info*\n`;
-        if (result.imageBrief) {
-          infoMsg += `*Style:* ${escapeMarkdown(result.imageBrief.style || '-')}\n`;
-          infoMsg += `*Mood:* ${escapeMarkdown(result.imageBrief.mood || '-')}\n`;
-        }
-        if (result.qualityScore !== undefined) {
-          const scoreEmoji = result.qualityScore >= 0.8 ? '🟢' : result.qualityScore >= 0.6 ? '🟡' : '🔴';
-          infoMsg += `*Quality:* ${scoreEmoji} ${(result.qualityScore * 100).toFixed(0)}%\n`;
-        }
-        if (result.optimizedPrompt) {
-          infoMsg += `*Prompt:* ${escapeMarkdown((result.optimizedPrompt.prompt || '').substring(0, 100))}...\n`;
-        }
-        await ctx.reply(infoMsg, { parse_mode: 'Markdown' });
-        
-        // Pass captionResult object for proper parsing
-        await ctx.reply(templates.finalApprovalTemplate(result.pipeline, result.captionResult || caption), { parse_mode: 'Markdown' });
-      }
-    } catch (err) {
-      await ctx.reply(templates.errorTemplate(err.message), { parse_mode: 'Markdown' });
-    }
-  } else if ([PIPELINE_STATUS.AWAITING_FINAL_APPROVAL, PIPELINE_STATUS.APPROVED].includes(today.status)) {
-    await updatePipelineStatus(today.id, PIPELINE_STATUS.APPROVED);
-    await ctx.reply('✅ Final disetujui! Mempublikasikan...');
-
-    try {
-      const result = await publishFinal(today);
-      // Auto-save learning dari pipeline success
-      saveLearningAutomatically(result.permalink, today.caption_content, today.hashtags || [], {
-        source: 'pipeline', pillar: today.pillar_name, pipeline_id: today.id,
-      });
-      await ctx.reply(templates.publishConfirmationTemplate(result), { parse_mode: 'Markdown' });
-    } catch (err) {
-      await ctx.reply(templates.errorTemplate(err.message), { parse_mode: 'Markdown' });
-    }
-  } else {
-    await ctx.reply(`Status pipeline saat ini: ${today.status}. Tidak perlu approval sekarang.`);
-  }
-}
-
-export async function handleRevise(ctx, today, note) {
-  if (today.status === PIPELINE_STATUS.AWAITING_SCRIPT_APPROVAL) {
-    const notes = [...(today.revision_notes || []), { gate: 1, note, timestamp: new Date().toISOString() }];
-    await updatePipelineStatus(today.id, PIPELINE_STATUS.SCRIPT_DRAFTED, {
-      revision_notes: notes,
-      revision_count_gate1: (today.revision_count_gate1 || 0) + 1,
-    });
-    await ctx.reply(`🔄 Naskah direvisi. Memproses ulang dengan catatan: "${note}"`);
-
-    const freshPipeline = await supabase.from('content_pipeline').select('*').eq('id', today.id).single().then(r => r.data);
-    const scriptContent = await runScriptAgent(freshPipeline);
-    await updatePipelineStatus(today.id, PIPELINE_STATUS.AWAITING_SCRIPT_APPROVAL);
-    await ctx.reply(templates.scriptApprovalTemplate(freshPipeline, scriptContent), { parse_mode: 'Markdown' });
-
-  } else if ([PIPELINE_STATUS.AWAITING_FINAL_APPROVAL, PIPELINE_STATUS.APPROVED].includes(today.status)) {
-    const notes = [...(today.revision_notes || []), { gate: 2, note, timestamp: new Date().toISOString() }];
-    await ctx.reply(`🔄 Preview direvisi. Memproses ulang dengan catatan: "${note}"`);
-
-    const freshPipeline = await supabase.from('content_pipeline').select('*').eq('id', today.id).single().then(r => r.data);
-
-    await updatePipelineStatus(today.id, PIPELINE_STATUS.GENERATING_ASSET, {
-      revision_notes: notes,
-      revision_count_gate2: (today.revision_count_gate2 || 0) + 1,
-    });
-
-    try {
-      // 1. Image Brief + Prompt Optimizer
-      const imageBriefResult = await runImageBriefAgent(freshPipeline, freshPipeline.script_content);
-      const imageBrief = imageBriefResult.brief;
-      const promptOptResult = await runPromptOptimizer(imageBrief);
-      const optimizedPrompt = promptOptResult.optimized;
-
-      // 2. Generate image with optimized prompt
-      const imageResult = await runImageAgent(freshPipeline, optimizedPrompt.prompt);
-
-      if (imageResult.type === 'awaiting_real_photo') {
-        await updatePipelineStatus(today.id, PIPELINE_STATUS.AWAITING_ASSET);
-        await ctx.reply(templates.requestPhotoTemplate(freshPipeline), { parse_mode: 'Markdown' });
-        return;
-      }
-
-      // 3. Quality check + auto-regenerate
-      let finalImage = imageResult;
-      const qualityResult = await runImageQualityChecker(imageResult.filepath, freshPipeline.script_content);
-      const qualityAssessment = qualityResult.assessment;
-      if (qualityAssessment.score < 0.7) {
-        const regenerateImage = async () => {
-          const newResult = await runImageAgent(freshPipeline, optimizedPrompt.prompt);
-          return newResult.filepath;
-        };
-        finalImage = await autoRegenerateIfNeeded(qualityResult, imageBrief, regenerateImage, 3);
-      }
-
-      // 4. Duplicate check
-      const isDuplicate = await checkDuplicate(finalImage.filepath);
-      if (isDuplicate) {
-        const newImage = await runImageAgent(freshPipeline, optimizedPrompt.prompt);
-        if (newImage.type !== 'awaiting_real_photo') finalImage = newImage;
-      }
-      await storeImageHash(finalImage.filepath, freshPipeline.id);
-
-      // 5. Generate caption
-      const captionResult = await runCaptionAgent(freshPipeline, freshPipeline.script_content);
-
-      await updatePipelineStatus(today.id, PIPELINE_STATUS.AWAITING_FINAL_APPROVAL, {
-        asset_url: finalImage.filepath || finalImage.url,
-        caption_content: captionResult.caption,
-        hashtags: captionResult.hashtags,
-      });
-
-      // Send preview
-      if (finalImage.type === 'ai_generated' && finalImage.filepath) {
-        try {
-          const { buffer } = await compressForTelegram(finalImage.filepath);
-          await ctx.replyWithPhoto({ source: buffer, filename: path.basename(finalImage.filepath) });
-        } catch (e) {
-          console.warn('[Pipeline] Gagal kirim revisi foto:', e.message);
-        }
-      }
-
-      // Send quality info
-      let infoMsg = `📊 *Asset Info (Revisi)*\n`;
-      if (imageBrief) {
-        infoMsg += `*Style:* ${escapeMarkdown(imageBrief.style || '-')}\n`;
-        infoMsg += `*Mood:* ${escapeMarkdown(imageBrief.mood || '-')}\n`;
-      }
-      if (qualityAssessment.score !== undefined) {
-        const scoreEmoji = qualityAssessment.score >= 0.8 ? '🟢' : qualityAssessment.score >= 0.6 ? '🟡' : '🔴';
-        infoMsg += `*Quality:* ${scoreEmoji} ${(qualityAssessment.score * 100).toFixed(0)}%\n`;
-      }
-      await ctx.reply(infoMsg, { parse_mode: 'Markdown' });
-
-      const freshPipeline2 = await supabase.from('content_pipeline').select('*').eq('id', today.id).single().then(r => r.data);
-      await ctx.reply(templates.finalApprovalTemplate(freshPipeline2, freshPipeline2.caption_content || ''), { parse_mode: 'Markdown' });
-    } catch (err) {
-      await ctx.reply(templates.errorTemplate(err.message), { parse_mode: 'Markdown' });
-    }
-  } else {
-    await ctx.reply(`Revisi hanya bisa dilakukan saat menunggu approval. Status sekarang: ${today.status}`);
-  }
-}
-
-export async function handlePhoto(ctx, photo, awaitingPhoto) {
-  const file = await ctx.api.getFile(photo.file_id);
-  const fileUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
-  const captionText = ctx.message.caption?.trim() || '';
-
-  if (!awaitingPhoto) {
-    if (captionText) {
-      await ctx.reply('⏳ Menganalisis gambar dengan AI...');
-      try {
-        const result = await callWithFailover(agentProviders.vision, [
-          {
-            role: 'system',
-            content: `Kamu adalah asisten AI untuk Tulehu Inkline. Analisis gambar yang dikirim dan jawab pertanyaan pengguna. Jawab dalam bahasa Indonesia yang santai dan helpful.\n\nBRAND CONTEXT:\n${brandContext}`,
-          },
-          {
-            role: 'user',
-            content: multimodalText(captionText, fileUrl),
-          },
-        ], { temperature: 0.7, maxTokens: 1024 });
-        await ctx.reply(`💬 *Analisis Gambar:*\n\n${escapeMarkdown(result.content)}`, { parse_mode: 'Markdown' });
-      } catch (err) {
-        await ctx.reply(`❌ Gagal menganalisis gambar: ${err.message}`);
-      }
-    } else {
-      await ctx.reply('Foto diterima! Kirim dengan teks pertanyaan biar saya analisis pakai AI.');
-    }
-    return;
-  }
-
-  await updatePipelineStatus(awaitingPhoto.id, PIPELINE_STATUS.GENERATING_ASSET, {
-    asset_url: fileUrl,
-    asset_type: 'real_photo',
-  });
-
-  await ctx.reply('📸 Foto diterima! Melanjutkan pipeline...');
-
-  try {
-    const freshPipeline = await supabase.from('content_pipeline').select('*').eq('id', awaitingPhoto.id).single().then(r => r.data);
-    const captionResult = await runCaptionAgent(freshPipeline, freshPipeline.script_content);
-
-    await updatePipelineStatus(freshPipeline.id, PIPELINE_STATUS.AWAITING_FINAL_APPROVAL);
-
-    await ctx.replyWithPhoto(photo.file_id);
-    await ctx.reply(
-      templates.finalApprovalTemplate(freshPipeline, freshPipeline.caption_content || ''),
-      { parse_mode: 'Markdown' }
-    );
-  } catch (err) {
-    await ctx.reply(`❌ Error: ${err.message}`);
-  }
-}
-
-// ─── instagram_manage_comments ───────────
 
 export async function handleComments(ctx, mediaId) {
   try {
@@ -555,8 +194,6 @@ export async function handleReplyComment(ctx, commentId, message) {
   }
 }
 
-// ─── instagram_manage_messages ──────────
-
 export async function handleInbox(ctx) {
   try {
     const conversations = await getConversations();
@@ -584,8 +221,6 @@ export async function handleSendDm(ctx, conversationId, message) {
   }
 }
 
-// ─── instagram_manage_contents ──────────
-
 export async function handleArchivePost(ctx, mediaId) {
   try {
     await archiveMedia(mediaId);
@@ -603,8 +238,6 @@ export async function handleDeletePost(ctx, mediaId) {
     await ctx.reply(`❌ Gagal hapus: ${err.message}`);
   }
 }
-
-// ─── pages_show_list ─────────────────
 
 export async function handlePages(ctx) {
   try {
@@ -624,8 +257,6 @@ export async function handlePages(ctx) {
     await ctx.reply(`❌ Gagal ambil halaman: ${err.message}`);
   }
 }
-
-// ─── ads_read / ads_management ───────
 
 export async function handleAds(ctx) {
   try {
@@ -661,32 +292,6 @@ export async function handleFeedback(ctx, postIdOrUrl, message) {
     await ctx.reply('✅ Makasih feedbacknya bro, gue catet biar makin pinter.');
   } catch (err) {
     await ctx.reply(`❌ Gagal simpen feedback: ${err.message}`);
-  }
-}
-
-// ─── Learning helper ────────────────────
-
-async function saveLearningAutomatically(permalink, caption, hashtags, extra = {}) {
-  try {
-    const insight = `[Auto] ${extra.hook ? `Hook: "${extra.hook}". ` : ''}Diposting di ${permalink}`;
-    const pillar = extra.pillar || null;
-
-    await supabase.from('learnings').insert({
-      insight_summary: insight.substring(0, 500),
-      pillar_related: pillar,
-      confidence: 'medium',
-      based_on_post_count: 1,
-      evidence_notes: JSON.stringify({
-        permalink,
-        caption_length: caption?.length || 0,
-        hashtags: hashtags || [],
-        ...extra,
-        saved_at: new Date().toISOString(),
-      }),
-      status: 'active',
-    });
-  } catch (err) {
-    console.error('[Leader] Gagal auto-save learning:', err.message);
   }
 }
 
@@ -847,21 +452,19 @@ export async function recheckQuickPostVisual(ctx) {
 export async function handleQuickPost(ctx, photo, userCaption = '') {
   let fileUrl;
   let photoFileId;
-
-  let fileUrlForPublish; // URL asli buat Instagram
+  let fileUrlForPublish;
 
   if (photo && photo.file_id) {
     const file = await ctx.api.getFile(photo.file_id);
     const directUrl = `https://api.telegram.org/file/bot${config.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
     fileUrlForPublish = directUrl;
-    // Download langsung jadi base64 biar expired-proof buat dikirim ke Gemini
     const imgRes = await fetch(directUrl);
     if (imgRes.ok && (imgRes.headers.get('content-type') || '').startsWith('image/')) {
       const buf = Buffer.from(await imgRes.arrayBuffer());
       const mime = imgRes.headers.get('content-type');
       fileUrl = `data:${mime};base64,${buf.toString('base64')}`;
     } else {
-      fileUrl = directUrl; // fallback ke URL kalo gagal download
+      fileUrl = directUrl;
     }
     photoFileId = photo.file_id;
   } else if (quickPostDraft) {
@@ -948,9 +551,26 @@ export async function handleQuickPostPublish(ctx) {
     quickPostDraft = null;
 
     // Auto-save learning
-    saveLearningAutomatically(permalink, draft.content.caption, draft.content.hashtags, {
-      source: 'quick_post', hook: draft.content.hook, cta: draft.content.cta,
-    });
+    try {
+      await supabase.from('learnings').insert({
+        insight_summary: `[Auto] Quick Post. Diposting di ${permalink}`.substring(0, 500),
+        pillar_related: null,
+        confidence: 'medium',
+        based_on_post_count: 1,
+        evidence_notes: JSON.stringify({
+          permalink,
+          source: 'quick_post',
+          hook: draft.content.hook,
+          cta: draft.content.cta,
+          caption_length: draft.content.caption?.length || 0,
+          hashtags: draft.content.hashtags || [],
+          saved_at: new Date().toISOString(),
+        }),
+        status: 'active',
+      });
+    } catch (err) {
+      console.error('[Leader] Gagal auto-save learning:', err.message);
+    }
 
     if (draft?.photoFileId) {
       try { await ctx.replyWithPhoto(draft.photoFileId); } catch {}

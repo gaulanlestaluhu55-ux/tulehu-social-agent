@@ -97,14 +97,12 @@ Pipeline berhenti\. Cek log untuk detail\.`;
 
 export function statusTemplate(pipeline) {
   const statusEmoji = {
-    idea: '💡',
-    script_drafted: '📝',
-    awaiting_script_approval: '⏳',
-    script_approved: '✅',
-    awaiting_asset: '📸',
-    generating_asset: '🎨',
-    awaiting_final_approval: '⏳',
-    approved: '✅',
+    draft: '📝',
+    idea_ready: '💡',
+    script_ready: '✍️',
+    visual_uploaded: '🖼️',
+    caption_ready: '📝',
+    scheduled: '📅',
     publishing: '📤',
     published: '✅',
     failed: '❌',
