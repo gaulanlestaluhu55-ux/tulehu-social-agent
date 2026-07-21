@@ -182,7 +182,7 @@ export default function SlotPage({ params }) {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
           <h3>2. Script</h3>
           {slot.status === 'draft' || slot.status === 'idea_ready' ? (
-            <button className="btn btn-primary" onClick={generateScript} disabled={loading.script || slot.idea_selected_index === null || slot.idea_selected_index === undefined}>
+            <button className="btn btn-primary" onClick={generateScript} disabled={loading.script || slot.idea_selected_index == null}>
               {loading.script ? 'Generating...' : 'Generate Script'}
             </button>
           ) : editScript ? (
