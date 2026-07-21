@@ -1,5 +1,29 @@
 import { escapeMarkdown } from '../utils/helpers.js';
 
+function parseCaptionContent(captionContent) {
+  if (!captionContent) return { text: '', hashtags: [] };
+  
+  // If it's already an object
+  if (typeof captionContent === 'object') {
+    return {
+      text: captionContent.caption || captionContent.text || '',
+      hashtags: captionContent.hashtags || [],
+    };
+  }
+  
+  // Try to parse JSON string
+  try {
+    const parsed = JSON.parse(captionContent);
+    return {
+      text: parsed.caption || parsed.text || captionContent,
+      hashtags: parsed.hashtags || [],
+    };
+  } catch {
+    // Not JSON, use as plain text
+    return { text: captionContent, hashtags: [] };
+  }
+}
+
 export function scriptApprovalTemplate(pipeline, scriptContent) {
   const bodyText = Array.isArray(scriptContent.body)
     ? scriptContent.body.map((b, i) => `${i + 1}. ${escapeMarkdown(b)}`).join('\n')
@@ -27,16 +51,19 @@ Balas *"revisi: \\[pesan\\]"* untuk minta perbaikan\.
 }
 
 export function finalApprovalTemplate(pipeline, captionContent) {
+  const { text, hashtags } = parseCaptionContent(captionContent);
+  const hashtagStr = hashtags.length > 0 ? '\n\n' + hashtags.map(h => `#${h}`).join(' ') : '';
+
   return `🖼 *Preview Final — ${escapeMarkdown(pipeline.idea_content?.angle || 'Konten')}*
 
 *Caption:*
-${escapeMarkdown(captionContent)}
+${escapeMarkdown(text)}${hashtagStr}
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━
 Balas *"approve"* untuk langsung publish ke Instagram\.
 Balas *"revisi: \\[pesan\\]"* untuk minta perbaikan\.
 Balas *"posting"* untuk langsung publish\.
-━━━━━━━━━━━━━━━━━━`;
+━━━━━━━━━━━━━━━━━━━`;
 }
 
 export function requestPhotoTemplate(pipeline) {

@@ -341,11 +341,12 @@ export async function handleApprove(ctx, today) {
           infoMsg += `*Quality:* ${scoreEmoji} ${(result.qualityScore * 100).toFixed(0)}%\n`;
         }
         if (result.optimizedPrompt) {
-          infoMsg += `*Prompt:* ${escapeMarkdown(result.optimizedPrompt.prompt?.substring(0, 100) || '-')}...\n`;
+          infoMsg += `*Prompt:* ${escapeMarkdown((result.optimizedPrompt.prompt || '').substring(0, 100))}...\n`;
         }
         await ctx.reply(infoMsg, { parse_mode: 'Markdown' });
         
-        await ctx.reply(templates.finalApprovalTemplate(result.pipeline, caption), { parse_mode: 'Markdown' });
+        // Pass captionResult object for proper parsing
+        await ctx.reply(templates.finalApprovalTemplate(result.pipeline, result.captionResult || caption), { parse_mode: 'Markdown' });
       }
     } catch (err) {
       await ctx.reply(templates.errorTemplate(err.message), { parse_mode: 'Markdown' });
