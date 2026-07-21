@@ -107,8 +107,17 @@ export default function SlotPage({ params }) {
       let data;
       try { data = await res.json(); } catch { data = null; }
       if (!res.ok) throw new Error(data?.error || `Upload failed (${res.status})`);
-      showToast(`Slide ${slideIndex !== null ? slideIndex + 1 : ''} berhasil di-upload!`);
-      loadSlot();
+      if (slideIndex !== null) {
+        setSlot(prev => {
+          const arr = Array.isArray(prev.asset_url) ? [...prev.asset_url] : [];
+          arr[slideIndex] = data.url;
+          return { ...prev, asset_url: arr };
+        });
+      } else {
+        setSlot(prev => ({ ...prev, asset_url: data.url, status: 'visual_uploaded' }));
+      }
+      showToast(slideIndex !== null ? `Slide ${slideIndex + 1} berhasil di-upload!` : 'Visual berhasil di-upload!');
+      await loadSlot();
     } finally {
       setLoading(l => ({ ...l, [key]: false }));
     }
