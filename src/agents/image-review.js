@@ -111,24 +111,26 @@ Return quality assessment JSON.`;
   };
 }
 
-export async function autoRegenerateIfNeeded(imagePath, imageBrief, generateFn, maxAttempts = 3) {
+export async function autoRegenerateIfNeeded(imageResult, imageBrief, generateFn, maxAttempts = 3) {
+  const assessment = imageResult.assessment || { score: 0.7 };
+  let currentPath = imageResult.filepath;
+
   for (let attempt = 1; attempt <= maxAttempts; attempt++) {
     console.log(`[Image Review] Attempt ${attempt}/${maxAttempts}`);
 
-    const { assessment } = await runImageQualityChecker(imagePath, imageBrief);
-
     if (assessment.score >= 0.7) {
       console.log(`[Image Review] Image accepted (score: ${assessment.score})`);
-      return { success: true, assessment, attempts: attempt };
+      return { success: true, assessment, attempts: attempt, filepath: currentPath };
     }
 
     if (attempt < maxAttempts) {
       console.log(`[Image Review] Image rejected (score: ${assessment.score}), regenerating...`);
       const newPath = await generateFn();
-      if (newPath) imagePath = newPath;
+      if (newPath) currentPath = newPath;
     }
   }
 
   console.log(`[Image Review] All ${maxAttempts} attempts exhausted, using last image`);
-  return { success: false, assessment: await runImageQualityChecker(imagePath, imageBrief).then(r => r.assessment), attempts: maxAttempts };
+  const finalResult = await runImageQualityChecker(currentPath, imageBrief);
+  return { success: false, assessment: finalResult.assessment, attempts: maxAttempts, filepath: currentPath };
 }

@@ -121,12 +121,14 @@ export async function continueAfterScriptApproval(pipeline) {
     }
 
     // 2. Image Brief Agent — generate detailed brief for image
-    const imageBrief = await runImageBriefAgent(pipeline, pipeline.script_content);
+    const imageBriefResult = await runImageBriefAgent(pipeline, pipeline.script_content);
+    const imageBrief = imageBriefResult.brief;
     logger.info(`[Pipeline] Image brief: ${imageBrief.style}, ${imageBrief.mood}`);
 
     // 3. Prompt Optimizer — convert brief to optimized SDXL prompt
-    const optimizedPrompt = await runPromptOptimizer(imageBrief);
-    logger.info(`[Pipeline] Optimized prompt ready: ${optimizedPrompt.prompt.substring(0, 50)}...`);
+    const promptOptResult = await runPromptOptimizer(imageBrief);
+    const optimizedPrompt = promptOptResult.optimized;
+    logger.info(`[Pipeline] Optimized prompt ready: ${(optimizedPrompt.prompt || '').substring(0, 50)}...`);
 
     // 4. Generate image with optimized prompt
     const imageResult = await runImageAgent(pipeline, optimizedPrompt.prompt);
@@ -140,13 +142,19 @@ export async function continueAfterScriptApproval(pipeline) {
     // 5. Quality check + auto-regenerate up to 3 times
     let finalImage = imageResult;
     const qualityResult = await runImageQualityChecker(imageResult.filepath, pipeline.script_content);
+    const qualityAssessment = qualityResult.assessment;
     
-    if (!qualityResult.passed) {
-      logger.warn(`[Pipeline] Image quality low (${qualityResult.score}), attempting auto-regenerate...`);
+    if (qualityAssessment.score < 0.7) {
+      logger.warn(`[Pipeline] Image quality low (${qualityAssessment.score}), attempting auto-regenerate...`);
+      // Auto-regenerate: callback to generate new image
+      const regenerateImage = async () => {
+        const newResult = await runImageAgent(pipeline, optimizedPrompt.prompt);
+        return newResult.filepath;
+      };
       finalImage = await autoRegenerateIfNeeded(
         qualityResult,
         imageBrief,
-        pipeline.script_content,
+        regenerateImage,
         3
       );
     }
@@ -168,12 +176,13 @@ export async function continueAfterScriptApproval(pipeline) {
     const captionResult = await runCaptionAgent(pipeline, pipeline.script_content);
 
     // 9. Validate caption
-    const captionValidation = await validateCaption(captionResult.caption_content);
-    logger.info(`[Pipeline] Caption validation: ${captionValidation.score} (${captionValidation.passed ? 'PASS' : 'FAIL'})`);
+    const captionValidation = await validateCaption(captionResult);
+    logger.info(`[Pipeline] Caption validation: ${captionValidation.score} (${captionValidation.valid ? 'PASS' : 'FAIL'})`);
 
     await updatePipelineStatus(pipeline.id, PIPELINE_STATUS.AWAITING_FINAL_APPROVAL, {
       asset_url: finalImage.filepath || finalImage.url,
-      caption_content: captionResult.caption_content,
+      caption_content: captionResult.caption,
+      hashtags: captionResult.hashtags,
     });
 
     logger.info('[Pipeline] Asset siap. Menunggu approval final (Gate 2)');
@@ -185,7 +194,7 @@ export async function continueAfterScriptApproval(pipeline) {
       captionResult,
       imageBrief,
       optimizedPrompt,
-      qualityScore: qualityResult.score,
+      qualityScore: qualityAssessment.score,
     };
 
   } catch (err) {
@@ -267,8 +276,10 @@ export async function autoPipelineToEnd(pipeline) {
   await updatePipelineStatus(pipeline.id, PIPELINE_STATUS.GENERATING_ASSET);
 
   // 1. Image Brief + Prompt Optimizer
-  const imageBrief = await runImageBriefAgent(fresh, fresh.script_content);
-  const optimizedPrompt = await runPromptOptimizer(imageBrief);
+  const imageBriefResult = await runImageBriefAgent(fresh, fresh.script_content);
+  const imageBrief = imageBriefResult.brief;
+  const promptOptResult = await runPromptOptimizer(imageBrief);
+  const optimizedPrompt = promptOptResult.optimized;
 
   // 2. Generate image with optimized prompt
   const imageResult = await runImageAgent(fresh, optimizedPrompt.prompt);
@@ -288,8 +299,13 @@ export async function autoPipelineToEnd(pipeline) {
   // 3. Quality check + auto-regenerate
   let finalImage = imageResult;
   const qualityResult = await runImageQualityChecker(imageResult.filepath, fresh.script_content);
-  if (!qualityResult.passed) {
-    finalImage = await autoRegenerateIfNeeded(qualityResult, imageBrief, fresh.script_content, 3);
+  const qualityAssessment = qualityResult.assessment;
+  if (qualityAssessment.score < 0.7) {
+    const regenerateImage = async () => {
+      const newResult = await runImageAgent(fresh, optimizedPrompt.prompt);
+      return newResult.filepath;
+    };
+    finalImage = await autoRegenerateIfNeeded(qualityResult, imageBrief, regenerateImage, 3);
   }
 
   // 4. Duplicate check
@@ -304,13 +320,14 @@ export async function autoPipelineToEnd(pipeline) {
   const captionResult = await runCaptionAgent(fresh, fresh.script_content);
 
   // 6. Validate caption
-  const captionValidation = await validateCaption(captionResult.caption_content);
+  const captionValidation = await validateCaption(captionResult);
   logger.info(`[Auto] Caption validation: ${captionValidation.score}`);
 
   // Langsung publish
   await updatePipelineStatus(fresh.id, PIPELINE_STATUS.AWAITING_FINAL_APPROVAL, {
     asset_url: finalImage.filepath || finalImage.url,
-    caption_content: captionResult.caption_content,
+    caption_content: captionResult.caption,
+    hashtags: captionResult.hashtags,
   });
 
   const published = await publishFinal(await getPipelineById(fresh.id));

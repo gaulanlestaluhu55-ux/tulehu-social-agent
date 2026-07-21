@@ -396,8 +396,10 @@ export async function handleRevise(ctx, today, note) {
 
     try {
       // 1. Image Brief + Prompt Optimizer
-      const imageBrief = await runImageBriefAgent(freshPipeline, freshPipeline.script_content);
-      const optimizedPrompt = await runPromptOptimizer(imageBrief);
+      const imageBriefResult = await runImageBriefAgent(freshPipeline, freshPipeline.script_content);
+      const imageBrief = imageBriefResult.brief;
+      const promptOptResult = await runPromptOptimizer(imageBrief);
+      const optimizedPrompt = promptOptResult.optimized;
 
       // 2. Generate image with optimized prompt
       const imageResult = await runImageAgent(freshPipeline, optimizedPrompt.prompt);
@@ -411,8 +413,13 @@ export async function handleRevise(ctx, today, note) {
       // 3. Quality check + auto-regenerate
       let finalImage = imageResult;
       const qualityResult = await runImageQualityChecker(imageResult.filepath, freshPipeline.script_content);
-      if (!qualityResult.passed) {
-        finalImage = await autoRegenerateIfNeeded(qualityResult, imageBrief, freshPipeline.script_content, 3);
+      const qualityAssessment = qualityResult.assessment;
+      if (qualityAssessment.score < 0.7) {
+        const regenerateImage = async () => {
+          const newResult = await runImageAgent(freshPipeline, optimizedPrompt.prompt);
+          return newResult.filepath;
+        };
+        finalImage = await autoRegenerateIfNeeded(qualityResult, imageBrief, regenerateImage, 3);
       }
 
       // 4. Duplicate check
@@ -428,7 +435,8 @@ export async function handleRevise(ctx, today, note) {
 
       await updatePipelineStatus(today.id, PIPELINE_STATUS.AWAITING_FINAL_APPROVAL, {
         asset_url: finalImage.filepath || finalImage.url,
-        caption_content: captionResult.caption_content,
+        caption_content: captionResult.caption,
+        hashtags: captionResult.hashtags,
       });
 
       // Send preview
@@ -447,9 +455,9 @@ export async function handleRevise(ctx, today, note) {
         infoMsg += `*Style:* ${escapeMarkdown(imageBrief.style || '-')}\n`;
         infoMsg += `*Mood:* ${escapeMarkdown(imageBrief.mood || '-')}\n`;
       }
-      if (qualityResult.score !== undefined) {
-        const scoreEmoji = qualityResult.score >= 0.8 ? '🟢' : qualityResult.score >= 0.6 ? '🟡' : '🔴';
-        infoMsg += `*Quality:* ${scoreEmoji} ${(qualityResult.score * 100).toFixed(0)}%\n`;
+      if (qualityAssessment.score !== undefined) {
+        const scoreEmoji = qualityAssessment.score >= 0.8 ? '🟢' : qualityAssessment.score >= 0.6 ? '🟡' : '🔴';
+        infoMsg += `*Quality:* ${scoreEmoji} ${(qualityAssessment.score * 100).toFixed(0)}%\n`;
       }
       await ctx.reply(infoMsg, { parse_mode: 'Markdown' });
 
