@@ -1,36 +1,23 @@
 import 'dotenv/config';
 import { logger } from './utils/logger.js';
 import { createBot } from './telegram/bot.js';
-import { startDailyScheduler } from './scheduler/daily.js';
+import { startPublisherCron, startTokenCheckCron } from './scheduler/publisher-cron.js';
 import { startWeeklyScheduler } from './scheduler/weekly.js';
-import { getActivePipelines } from './db/supabase.js';
 
 logger.info('🚀 Tulehu Social Agent — Starting...');
 logger.info(`📱 Telegram bot connecting...`);
 
 const bot = createBot();
 
-// Start schedulers
-startDailyScheduler(bot);
+// Start schedulers (v2.0 — simple publisher cron, no auto-pipeline)
+startPublisherCron(bot);
+startTokenCheckCron(bot);
 startWeeklyScheduler(bot);
 
 // Start bot
 bot.start({
   onStart: async (botInfo) => {
     logger.info(`✅ Bot aktif: @${botInfo.username}`);
-
-    // Cek pipeline tertunda saat startup
-    try {
-      const pending = await getActivePipelines();
-      if (pending.length > 0) {
-        logger.info(`📋 ${pending.length} pipeline tertunda ditemukan`);
-        for (const p of pending) {
-          logger.info(`   - ${p.calendar_date}: ${p.pillar_name} (${p.status})`);
-        }
-      }
-    } catch (err) {
-      logger.warn(`Gagal cek pipeline tertunda: ${err.message}`);
-    }
   },
 });
 
