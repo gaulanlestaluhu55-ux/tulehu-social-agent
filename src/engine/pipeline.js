@@ -208,7 +208,7 @@ export async function uploadVisual(pipelineId, fileBuffer, filename, slideIndex 
   if (isCarousel && slideIndex !== null) {
     const currentAssets = Array.isArray(pipeline.asset_url) ? [...pipeline.asset_url] : [];
     currentAssets[slideIndex] = publicUrl;
-    await updatePipelineStatus(pipelineId, null, {
+    await updatePipelineStatus(pipelineId, pipeline.status, {
       asset_url: currentAssets,
       asset_type: 'image/jpeg',
     });
