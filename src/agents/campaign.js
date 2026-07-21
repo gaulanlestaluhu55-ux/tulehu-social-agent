@@ -64,7 +64,7 @@ Return JSON plan.`;
     return await callWithFailover(agentProviders.campaign, [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
-    ], { temperature: 0.7, responseFormat: 'json_object' });
+    ], { temperature: 0.7, responseFormat: { type: 'json_object' } });
   }, 'campaign');
 
   let plan;

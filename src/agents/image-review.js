@@ -83,7 +83,7 @@ Return quality assessment JSON.`;
           { type: 'image_url', image_url: { url: dataUrl } },
         ],
       },
-    ], { temperature: 0.3, responseFormat: 'json_object' });
+    ], { temperature: 0.3, responseFormat: { type: 'json_object' } });
   }, 'image_review');
 
   let assessment;

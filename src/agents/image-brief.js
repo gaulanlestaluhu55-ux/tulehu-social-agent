@@ -58,7 +58,7 @@ Return JSON brief.`;
     return await callWithFailover(agentProviders.image_brief, [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
-    ], { temperature: 0.6, responseFormat: 'json_object' });
+    ], { temperature: 0.6, responseFormat: { type: 'json_object' } });
   }, 'image_brief');
 
   let brief;

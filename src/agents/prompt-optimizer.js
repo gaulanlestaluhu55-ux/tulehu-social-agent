@@ -78,7 +78,7 @@ Return optimized SDXL prompt JSON.`;
     return await callWithFailover(agentProviders.prompt_optimizer, [
       { role: 'system', content: systemPrompt },
       { role: 'user', content: userPrompt },
-    ], { temperature: 0.5, responseFormat: 'json_object' });
+    ], { temperature: 0.5, responseFormat: { type: 'json_object' } });
   }, 'prompt_optimizer');
 
   let optimized;
