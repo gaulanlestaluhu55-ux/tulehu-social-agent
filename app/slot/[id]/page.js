@@ -417,7 +417,10 @@ export default function SlotPage({ params }) {
                 {Array.isArray(slot.asset_url) && slot.asset_url[i] ? (
                   <div>
                     <img src={slot.asset_url[i]} alt={`Slide ${i + 1}`} style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '6px', marginBottom: '0.5rem' }} />
-                    <p style={{ fontSize: '0.75rem', color: 'var(--success)' }}>✓ Uploaded</p>
+                    <label className="btn" style={{ cursor: 'pointer', background: 'var(--success)', color: '#fff' }}>
+                      {loading[`visual-${i}`] ? <><span className="spinner" />Uploading...</> : '✓ Uploaded — Click to Replace'}
+                      <input type="file" accept="image/*" onChange={(e) => uploadVisual(e, i)} hidden disabled={loading[`visual-${i}`]} />
+                    </label>
                   </div>
                 ) : (
                   <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
@@ -431,7 +434,10 @@ export default function SlotPage({ params }) {
         ) : slot.asset_url ? (
           <div>
             <img src={slot.asset_url} alt="Visual" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px', marginBottom: '0.5rem' }} />
-            <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Uploaded</p>
+            <label className="btn" style={{ cursor: 'pointer', background: 'var(--success)', color: '#fff' }}>
+              {loading.visual ? <><span className="spinner" />Uploading...</> : '✓ Uploaded — Click to Replace'}
+              <input type="file" accept="image/*" onChange={uploadVisual} hidden disabled={loading.visual} />
+            </label>
           </div>
         ) : (
           <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
