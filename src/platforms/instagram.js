@@ -74,6 +74,78 @@ export async function getMediaChildren(carouselMediaId) {
   return get(`/${carouselMediaId}/children`, { fields: 'id,media_url,media_type' });
 }
 
+// ─── instagram_carousel_publish ────────────
+
+export async function createImageContainer(imageUrl) {
+  const data = await post(`/${igUser()}/media`, {
+    image_url: imageUrl,
+    is_carousel_item: true,
+  });
+  if (data.error) throw new Error(`Create carousel item gagal: ${data.error.message}`);
+  return data.id;
+}
+
+export async function createCarouselContainer(caption, childIds) {
+  const children = childIds.join(',');
+  const data = await post(`/${igUser()}/media`, {
+    media_type: 'CAROUSEL',
+    children,
+    caption,
+  });
+  if (data.error) throw new Error(`Create carousel gagal: ${data.error.message}`);
+  return data.id;
+}
+
+export async function publishCarousel(imageUrls, caption) {
+  console.log(`[Instagram] Publishing carousel (${imageUrls.length} images)...`);
+
+  const childIds = [];
+  for (let i = 0; i < imageUrls.length; i++) {
+    console.log(`[Instagram] Creating container ${i + 1}/${imageUrls.length}...`);
+    const childId = await createImageContainer(imageUrls[i]);
+    childIds.push(childId);
+  }
+
+  console.log(`[Instagram] Creating carousel container...`);
+  const carouselId = await createCarouselContainer(caption, childIds);
+
+  console.log(`[Instagram] Publishing carousel...`);
+  const published = await publishMediaContainer(carouselId);
+
+  console.log(`[Instagram] Carousel published: ${published}`);
+  return published;
+}
+
+// ─── unified publisher ─────────────────────
+
+export async function publishToInstagram({ imageUrl, imageUrls, caption, hashtags }) {
+  const fullCaption = hashtags?.length
+    ? `${caption}\n\n${hashtags.map(h => `#${h}`).join(' ')}`
+    : caption;
+
+  if (imageUrls && imageUrls.length > 1) {
+    const igPostId = await publishCarousel(imageUrls, fullCaption);
+    let permalink = `https://instagram.com/p/${igPostId}/`;
+    try {
+      const media = await getMedia(igPostId);
+      if (media.permalink) permalink = media.permalink;
+    } catch {}
+    return { id: igPostId, permalink };
+  }
+
+  const containerId = await createMediaContainer(imageUrl, fullCaption);
+  await new Promise(r => setTimeout(r, 5000));
+  const igPostId = await publishMediaContainer(containerId);
+
+  let permalink = `https://instagram.com/p/${igPostId}/`;
+  try {
+    const media = await getMedia(igPostId);
+    if (media.permalink) permalink = media.permalink;
+  } catch {}
+
+  return { id: igPostId, permalink };
+}
+
 // ─── instagram_manage_insights ────────────
 
 export async function getMediaInsights(mediaId) {

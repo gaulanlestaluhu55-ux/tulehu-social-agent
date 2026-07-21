@@ -284,6 +284,8 @@ export async function scheduleSlot(pipelineId, scheduledAt) {
   const pipeline = await getPipelineById(pipelineId);
   if (!pipeline) throw new Error(`Pipeline ${pipelineId} not found`);
 
+  const isCarousel = pipeline.content_type === 'carousel';
+
   // Insert into publish_queue
   const { error: queueError } = await supabase
     .from('publish_queue')
@@ -293,8 +295,10 @@ export async function scheduleSlot(pipelineId, scheduledAt) {
       status: 'pending',
       caption_content: pipeline.caption_content,
       hashtags: pipeline.hashtags,
-      asset_url: pipeline.asset_url,
+      asset_url: isCarousel ? (Array.isArray(pipeline.asset_url) ? pipeline.asset_url[0] : null) : pipeline.asset_url,
+      asset_urls: isCarousel ? pipeline.asset_url : null,
       asset_type: pipeline.asset_type,
+      content_type: pipeline.content_type,
       scheduled_at: scheduledAt,
     });
 

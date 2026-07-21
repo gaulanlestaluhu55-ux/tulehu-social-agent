@@ -43,6 +43,7 @@ export function startPublisherCron(bot) {
           const { publishToInstagram } = await import('../platforms/instagram.js');
           const result = await publishToInstagram({
             imageUrl: item.asset_url,
+            imageUrls: Array.isArray(item.asset_urls) ? item.asset_urls : null,
             caption: item.caption_content,
             hashtags: item.hashtags,
           });
