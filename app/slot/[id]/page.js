@@ -179,7 +179,7 @@ export default function SlotPage({ params }) {
 
   const addSlide = () => {
     if (!editScript?.slides) return;
-    const newSlides = [...editScript.slides, { headline: '', description: '', visual_notes: '' }];
+    const newSlides = [...editScript.slides, { headline: '', description: '', slide_type: 'image', visual_notes: '' }];
     setEditScript({ ...editScript, slides: newSlides });
   };
 
@@ -321,7 +321,13 @@ export default function SlotPage({ params }) {
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
                       <input className="input" placeholder="Headline" value={editScript.slides[activeSlide].headline || ''} onChange={(e) => updateSlide(activeSlide, 'headline', e.target.value)} />
                       <textarea className="input" placeholder="Deskripsi" value={editScript.slides[activeSlide].description || ''} onChange={(e) => updateSlide(activeSlide, 'description', e.target.value)} style={{ minHeight: '80px' }} />
-                      <input className="input" placeholder="Visual Notes" value={editScript.slides[activeSlide].visual_notes || ''} onChange={(e) => updateSlide(activeSlide, 'visual_notes', e.target.value)} />
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <select className="input" value={editScript.slides[activeSlide].slide_type || 'image'} onChange={(e) => updateSlide(activeSlide, 'slide_type', e.target.value)} style={{ flex: 1 }}>
+                          <option value="image">Foto</option>
+                          <option value="layout">Desain Slide</option>
+                        </select>
+                      </div>
+                      <input className="input" placeholder={editScript.slides[activeSlide].slide_type === 'layout' ? 'Desain notes (layout, warna, font, ikon)' : 'Visual Notes (objek, posisi, suasana)'} value={editScript.slides[activeSlide].visual_notes || ''} onChange={(e) => updateSlide(activeSlide, 'visual_notes', e.target.value)} />
                     </div>
                   </div>
                 )}
@@ -358,13 +364,26 @@ export default function SlotPage({ params }) {
               ))}
             </div>
             {slot.image_brief[activeSlide] && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Style</p><p>{slot.image_brief[activeSlide].style}</p></div>
-                <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Mood</p><p>{slot.image_brief[activeSlide].mood}</p></div>
-                <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Lighting</p><p>{slot.image_brief[activeSlide].lighting}</p></div>
-                <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Composition</p><p>{slot.image_brief[activeSlide].composition}</p></div>
-                {slot.image_brief[activeSlide].subject && <div style={{ gridColumn: '1 / -1' }}><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Subject</p><p>{slot.image_brief[activeSlide].subject}</p></div>}
-              </div>
+              slot.image_brief[activeSlide].type === 'layout' ? (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div style={{ gridColumn: '1 / -1' }}><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Layout</p><p>{slot.image_brief[activeSlide].layout}</p></div>
+                  <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Background</p><p>{slot.image_brief[activeSlide].background_type}</p></div>
+                  <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Warna</p><p>{(slot.image_brief[activeSlide].background_colors || []).join(', ')}</p></div>
+                  <div style={{ gridColumn: '1 / -1' }}><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Typografi</p><p>Headline: {slot.image_brief[activeSlide].typography?.headline_style} / {slot.image_brief[activeSlide].typography?.headline_color} | Body: {slot.image_brief[activeSlide].typography?.body_style}</p></div>
+                  <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Ikon</p><p>{slot.image_brief[activeSlide].icon_style}</p></div>
+                  <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Dekorasi</p><p>{slot.image_brief[activeSlide].decorative_elements}</p></div>
+                  <div style={{ gridColumn: '1 / -1' }}><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Mood</p><p>{slot.image_brief[activeSlide].overall_mood}</p></div>
+                  {slot.image_brief[activeSlide].notes && <div style={{ gridColumn: '1 / -1' }}><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Notes</p><p>{slot.image_brief[activeSlide].notes}</p></div>}
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Style</p><p>{slot.image_brief[activeSlide].style}</p></div>
+                  <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Mood</p><p>{slot.image_brief[activeSlide].mood}</p></div>
+                  <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Lighting</p><p>{slot.image_brief[activeSlide].lighting}</p></div>
+                  <div><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Composition</p><p>{slot.image_brief[activeSlide].composition}</p></div>
+                  {slot.image_brief[activeSlide].subject && <div style={{ gridColumn: '1 / -1' }}><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Subject</p><p>{slot.image_brief[activeSlide].subject}</p></div>}
+                </div>
+              )
             )}
           </div>
         ) : slot.image_brief && !isCarousel ? (
@@ -387,31 +406,51 @@ export default function SlotPage({ params }) {
                       onClick={() => setActiveSlide(i)}
                       style={{ fontSize: '0.75rem', padding: '0.25rem 0.5rem' }}
                     >
-                      Prompt {i + 1}
+                      {slot.optimized_prompt[i]?.type === 'layout' ? 'Design' : 'Prompt'} {i + 1}
                     </button>
                   ))}
                 </div>
                 {slot.optimized_prompt[activeSlide] && (
-                  <>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
-                      <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>SDXL Prompt (Slide {activeSlide + 1})</p>
-                      <button className="btn btn-secondary copy-btn" onClick={() => copyToClipboard(slot.optimized_prompt[activeSlide].prompt, `prompt-${activeSlide}`)}>
-                        {copiedField === `prompt-${activeSlide}` ? '✓ Copied!' : 'Copy'}
-                      </button>
-                    </div>
-                    <div className="prompt-box">{slot.optimized_prompt[activeSlide].prompt}</div>
-                    {slot.optimized_prompt[activeSlide].negative_prompt && (
-                      <>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', marginBottom: '0.5rem' }}>
-                          <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Negative Prompt</p>
-                          <button className="btn btn-secondary copy-btn" onClick={() => copyToClipboard(slot.optimized_prompt[activeSlide].negative_prompt, `neg-${activeSlide}`)}>
-                            {copiedField === `neg-${activeSlide}` ? '✓ Copied!' : 'Copy'}
-                          </button>
-                        </div>
-                        <div className="prompt-box">{slot.optimized_prompt[activeSlide].negative_prompt}</div>
-                      </>
-                    )}
-                  </>
+                  slot.optimized_prompt[activeSlide].type === 'layout' ? (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Layout Direction (Slide {activeSlide + 1})</p>
+                        <button className="btn btn-secondary copy-btn" onClick={() => copyToClipboard(JSON.stringify(slot.optimized_prompt[activeSlide], null, 2), `design-${activeSlide}`)}>
+                          {copiedField === `design-${activeSlide}` ? '✓ Copied!' : 'Copy'}
+                        </button>
+                      </div>
+                      <div className="prompt-box">{slot.optimized_prompt[activeSlide].layout_direction}</div>
+                      <div style={{ marginTop: '0.5rem' }}>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Background: {slot.optimized_prompt[activeSlide].background_guidance}</p>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Typography: {slot.optimized_prompt[activeSlide].typography_guidance}</p>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Icons: {slot.optimized_prompt[activeSlide].icon_illustration}</p>
+                        {slot.optimized_prompt[activeSlide].designer_notes && (
+                          <div style={{ marginTop: '0.5rem' }}><p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Designer Notes</p><p>{slot.optimized_prompt[activeSlide].designer_notes}</p></div>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>SDXL Prompt (Slide {activeSlide + 1})</p>
+                        <button className="btn btn-secondary copy-btn" onClick={() => copyToClipboard(slot.optimized_prompt[activeSlide].prompt, `prompt-${activeSlide}`)}>
+                          {copiedField === `prompt-${activeSlide}` ? '✓ Copied!' : 'Copy'}
+                        </button>
+                      </div>
+                      <div className="prompt-box">{slot.optimized_prompt[activeSlide].prompt}</div>
+                      {slot.optimized_prompt[activeSlide].negative_prompt && (
+                        <>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.75rem', marginBottom: '0.5rem' }}>
+                            <p style={{ fontSize: '0.75rem', color: 'var(--muted)' }}>Negative Prompt</p>
+                            <button className="btn btn-secondary copy-btn" onClick={() => copyToClipboard(slot.optimized_prompt[activeSlide].negative_prompt, `neg-${activeSlide}`)}>
+                              {copiedField === `neg-${activeSlide}` ? '✓ Copied!' : 'Copy'}
+                            </button>
+                          </div>
+                          <div className="prompt-box">{slot.optimized_prompt[activeSlide].negative_prompt}</div>
+                        </>
+                      )}
+                    </>
+                  )
                 )}
               </div>
             ) : (

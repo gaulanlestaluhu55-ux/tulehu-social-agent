@@ -78,8 +78,8 @@ export const agentProviders = {
   ],
   script: [
     { name: 'gemini', model: config.GEMINI_MODEL },
-    { name: 'openrouter', model: 'meta-llama/llama-3.1-70b-instruct' },
     { name: 'groq', model: 'llama-3.3-70b-versatile' },
+    { name: 'openrouter', model: 'meta-llama/llama-3.1-70b-instruct' },
   ],
   caption: [
     { name: 'gemini', model: config.GEMINI_MODEL },

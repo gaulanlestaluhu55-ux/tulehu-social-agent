@@ -40,7 +40,10 @@ export async function runScriptAgent(pipeline) {
   let scriptContent;
   try {
     const cleaned = result.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    scriptContent = JSON.parse(cleaned);
+    const jsonStart = cleaned.indexOf('{');
+    const jsonEnd = cleaned.lastIndexOf('}');
+    const jsonStr = jsonStart !== -1 && jsonEnd !== -1 ? cleaned.substring(jsonStart, jsonEnd + 1) : cleaned;
+    scriptContent = JSON.parse(jsonStr);
 
     // Handle nested string: hook/body might contain JSON string
     if (typeof scriptContent.hook === 'string' && scriptContent.hook.includes('"hook"')) {

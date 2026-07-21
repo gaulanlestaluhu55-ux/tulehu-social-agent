@@ -19,12 +19,8 @@ OUTPUT FORMAT (JSON) untuk CAROUSEL:
     {
       "headline": "Judul slide 1 (pendek, menarik)",
       "description": "Isi/poin yang dijelaskan di slide ini",
-      "visual_notes": "Catatan visual: apa yang harus terlihat di gambar slide ini"
-    },
-    {
-      "headline": "Judul slide 2",
-      "description": "Isi/poin slide 2",
-      "visual_notes": "Catatan visual slide 2"
+      "slide_type": "image|layout",
+      "visual_notes": "Jika image: deskripsi foto yang perlu diambil/dibuat. Jika layout: deskripsi desain slide (warna, layout teks, ikon, font)"
     }
   ],
   "visual_notes": "catatan visual keseluruhan"
@@ -35,5 +31,7 @@ ATURAN CAROUSEL:
 - Slide 1: hook / pembuka yang menarik perhatian
 - Slide 2-N-1: isi / poin-poin utama
 - Slide terakhir: CTA atau kesimpulan
-- Setiap slide harus punya headline singkat dan visual_notes yang jelas untuk image generator
-- visual_notes harus spesifik: sebutkan objek, warna, posisi, suasana
+- Setiap slide harus punya headline singkat dan visual_notes yang jelas
+- Tentukan slide_type:
+  * "image" untuk slide yang butuh foto (produk, proses, orang) — deskripsi foto
+  * "layout" untuk slide yang isinya teks/edukasi/tips/quote — deskripsi desain (background, ikon, layout teks, font, warna)
