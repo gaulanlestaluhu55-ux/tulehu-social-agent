@@ -123,6 +123,28 @@ export default function SlotPage({ params }) {
     }
   };
 
+  const deleteVisual = async (slideIndex = null) => {
+    const key = slideIndex !== null ? `visual-${slideIndex}` : 'visual';
+    setLoading(l => ({ ...l, [key]: true }));
+    try {
+      const url = slideIndex !== null ? `/api/slots/${id}/visual?slideIndex=${slideIndex}` : `/api/slots/${id}/visual`;
+      const res = await fetch(url, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Gagal hapus visual');
+      if (slideIndex !== null) {
+        setSlot(prev => {
+          const arr = Array.isArray(prev.asset_url) ? [...prev.asset_url] : [];
+          arr[slideIndex] = null;
+          return { ...prev, asset_url: arr };
+        });
+      } else {
+        setSlot(prev => ({ ...prev, asset_url: null }));
+      }
+      showToast(slideIndex !== null ? `Slide ${slideIndex + 1} dihapus!` : 'Visual dihapus!');
+    } finally {
+      setLoading(l => ({ ...l, [key]: false }));
+    }
+  };
+
   const generateCaption = async () => {
     const data = await apiCall(`/api/slots/${id}/caption`, 'POST', null, 'caption');
     setEditCaption(data.caption || '');
@@ -426,10 +448,15 @@ export default function SlotPage({ params }) {
                 {Array.isArray(slot.asset_url) && slot.asset_url[i] ? (
                   <div>
                     <img src={slot.asset_url[i]} alt={`Slide ${i + 1}`} style={{ maxWidth: '100%', maxHeight: '200px', borderRadius: '6px', marginBottom: '0.5rem' }} />
-                    <label className="btn" style={{ cursor: 'pointer', background: 'var(--success)', color: '#fff' }}>
-                      {loading[`visual-${i}`] ? <><span className="spinner" />Uploading...</> : '✓ Uploaded — Click to Replace'}
-                      <input type="file" accept="image/*" onChange={(e) => uploadVisual(e, i)} hidden disabled={loading[`visual-${i}`]} />
-                    </label>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <label className="btn" style={{ cursor: 'pointer', background: 'var(--success)', color: '#fff', flex: 1 }}>
+                        {loading[`visual-${i}`] ? <><span className="spinner" />Uploading...</> : '✓ Uploaded — Replace'}
+                        <input type="file" accept="image/*" onChange={(e) => uploadVisual(e, i)} hidden disabled={loading[`visual-${i}`]} />
+                      </label>
+                      <button className="btn btn-danger" onClick={() => deleteVisual(i)} disabled={loading[`visual-${i}`]} style={{ padding: '0.5rem 0.75rem' }}>
+                        {loading[`visual-${i}`] ? <span className="spinner" /> : '✕'}
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
@@ -443,10 +470,15 @@ export default function SlotPage({ params }) {
         ) : slot.asset_url ? (
           <div>
             <img src={slot.asset_url} alt="Visual" style={{ maxWidth: '100%', maxHeight: '300px', borderRadius: '6px', marginBottom: '0.5rem' }} />
-            <label className="btn" style={{ cursor: 'pointer', background: 'var(--success)', color: '#fff' }}>
-              {loading.visual ? <><span className="spinner" />Uploading...</> : '✓ Uploaded — Click to Replace'}
-              <input type="file" accept="image/*" onChange={uploadVisual} hidden disabled={loading.visual} />
-            </label>
+            <div style={{ display: 'flex', gap: '0.5rem' }}>
+              <label className="btn" style={{ cursor: 'pointer', background: 'var(--success)', color: '#fff', flex: 1 }}>
+                {loading.visual ? <><span className="spinner" />Uploading...</> : '✓ Uploaded — Replace'}
+                <input type="file" accept="image/*" onChange={uploadVisual} hidden disabled={loading.visual} />
+              </label>
+              <button className="btn btn-danger" onClick={() => deleteVisual()} disabled={loading.visual} style={{ padding: '0.5rem 0.75rem' }}>
+                {loading.visual ? <span className="spinner" /> : '✕'}
+              </button>
+            </div>
           </div>
         ) : (
           <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>

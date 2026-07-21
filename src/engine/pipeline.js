@@ -225,6 +225,33 @@ export async function uploadVisual(pipelineId, fileBuffer, filename, slideIndex 
 }
 
 /**
+ * Remove uploaded visual from a slot.
+ * @param {string} pipelineId
+ * @param {number|null} slideIndex - for carousel, which slide to remove
+ */
+export async function removeVisual(pipelineId, slideIndex = null) {
+  const pipeline = await getPipelineById(pipelineId);
+  if (!pipeline) throw new Error(`Pipeline ${pipelineId} not found`);
+
+  const isCarousel = pipeline.content_type === 'carousel';
+
+  if (isCarousel && slideIndex !== null) {
+    const currentAssets = Array.isArray(pipeline.asset_url) ? [...pipeline.asset_url] : [];
+    currentAssets[slideIndex] = null;
+    await updatePipelineStatus(pipelineId, pipeline.status, {
+      asset_url: currentAssets,
+    });
+    logger.info(`[Pipeline] Carousel slide ${slideIndex} removed`);
+  } else {
+    await updatePipelineStatus(pipelineId, pipeline.status, {
+      asset_url: null,
+      asset_type: null,
+    });
+    logger.info(`[Pipeline] Visual removed for ${pipelineId}`);
+  }
+}
+
+/**
  * Generate caption for a slot.
  * @param {string} pipelineId
  * @returns {object} {caption, hashtags, validation}
