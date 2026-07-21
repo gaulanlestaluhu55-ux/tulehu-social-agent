@@ -17,6 +17,12 @@ export default function SlotPage({ params }) {
   const [scheduleTime, setScheduleTime] = useState('09:00');
   const [copiedField, setCopiedField] = useState(null);
   const [activeSlide, setActiveSlide] = useState(0);
+  const [toast, setToast] = useState(null);
+
+  const showToast = (msg, type = 'success') => {
+    setToast({ msg, type });
+    setTimeout(() => setToast(null), 3000);
+  };
 
   const isCarousel = slot?.content_type === 'carousel';
 
@@ -59,27 +65,32 @@ export default function SlotPage({ params }) {
 
   const generateIdeas = async () => {
     await apiCall(`/api/slots/${id}/idea`, 'POST', null, 'idea');
+    showToast('Ide berhasil di-generate!');
     loadSlot();
   };
 
   const selectIdea = async (idx) => {
     await apiCall(`/api/slots/${id}/idea`, 'PUT', { selectedIndex: idx });
+    showToast('Ide dipilih!');
     loadSlot();
   };
 
   const generateScript = async () => {
     const data = await apiCall(`/api/slots/${id}/script`, 'POST', null, 'script');
     setEditScript(data.scriptContent);
+    showToast('Script berhasil di-generate!');
     loadSlot();
   };
 
   const saveScript = async () => {
     await apiCall(`/api/slots/${id}/script`, 'PUT', { script: editScript }, 'script');
+    showToast('Script tersimpan!');
     loadSlot();
   };
 
   const generateVisualBrief = async () => {
     await apiCall(`/api/slots/${id}/visual-brief`, 'POST', null, 'visual-brief');
+    showToast('Visual brief berhasil di-generate!');
     loadSlot();
   };
 
@@ -96,6 +107,7 @@ export default function SlotPage({ params }) {
       let data;
       try { data = await res.json(); } catch { data = null; }
       if (!res.ok) throw new Error(data?.error || `Upload failed (${res.status})`);
+      showToast(`Slide ${slideIndex !== null ? slideIndex + 1 : ''} berhasil di-upload!`);
       loadSlot();
     } finally {
       setLoading(l => ({ ...l, [key]: false }));
@@ -106,12 +118,14 @@ export default function SlotPage({ params }) {
     const data = await apiCall(`/api/slots/${id}/caption`, 'POST', null, 'caption');
     setEditCaption(data.caption || '');
     setEditHashtags((data.hashtags || []).join(', '));
+    showToast('Caption berhasil di-generate!');
     loadSlot();
   };
 
   const saveCaption = async () => {
     const hashtags = editHashtags.split(',').map(h => h.trim()).filter(Boolean);
     await apiCall(`/api/slots/${id}/caption`, 'PUT', { caption: editCaption, hashtags }, 'caption');
+    showToast('Caption tersimpan!');
     loadSlot();
   };
 
@@ -119,6 +133,7 @@ export default function SlotPage({ params }) {
     if (!scheduleDate) return;
     const scheduledAt = `${scheduleDate}T${scheduleTime}:00+09:00`;
     await apiCall(`/api/slots/${id}/schedule`, 'POST', { scheduledAt }, 'schedule');
+    showToast('Slot berhasil dijadwalkan!');
     loadSlot();
   };
 
@@ -155,6 +170,16 @@ export default function SlotPage({ params }) {
 
   return (
     <div className="container">
+      {toast && (
+        <div style={{
+          position: 'fixed', top: '1rem', right: '1rem', zIndex: 1000,
+          padding: '0.75rem 1.25rem', borderRadius: '8px',
+          background: toast.type === 'success' ? 'var(--success)' : 'var(--danger)',
+          color: '#fff', fontWeight: 600, boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+        }}>
+          {toast.msg}
+        </div>
+      )}
       <nav className="nav">
         <a href="/">← Kalender</a>
         <a href="/queue">Queue</a>
