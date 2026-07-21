@@ -31,9 +31,9 @@ export async function runIdeaAgent(pipeline) {
   const startTime = Date.now();
   const result = await withRetry(async () => {
     return await callWithFailover(agentProviders.idea, [
-      { role: 'system', content: prompt + '\n\nIMPORTANT: Return a JSON object with "options" array containing 3-5 idea alternatives. Format: {"options": [{"angle": "...", "description": "...", "visual_type": "ai_generated|real_photo"}, ...]}' },
-      { role: 'user', content: `Hasilkan 3-5 ide konten untuk pilar: ${pipeline.pillar_name}` },
-    ], { temperature: 0.8 });
+      { role: 'system', content: prompt },
+      { role: 'user', content: `Hasilkan 3-5 ide konten untuk pilar: ${pipeline.pillar_name}\n\nIMPORTANT: Return ONLY a JSON object with "options" array. No markdown, no explanation. Format: {"options": [{"angle": "...", "description": "...", "visual_type": "ai_generated|real_photo"}, ...]}` },
+    ], { temperature: 0.8, responseFormat: { type: 'json_object' } });
   }, 'idea');
 
   let ideas;

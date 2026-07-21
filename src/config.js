@@ -92,8 +92,6 @@ export const agentProviders = {
   // Vision = Gemini only (butuh multimodal)
   vision: [
     { name: 'gemini', model: config.GEMINI_MODEL },
-    { name: 'openrouter', model: 'nvidia/nemotron-nano-12b-v2-vl:free' },
-    { name: 'openrouter', model: 'google/gemma-4-31b-it:free' },
   ],
   analysis: [
     { name: 'gemini', model: config.GEMINI_MODEL },
