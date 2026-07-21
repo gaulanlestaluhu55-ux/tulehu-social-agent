@@ -18,7 +18,9 @@ Pertimbangkan learnings di atas saat menulis — jika ada insight yang relevan d
 
 OUTPUT FORMAT (JSON):
 {
-  "caption": "teks caption final",
+  "caption": "teks caption final — JANGAN sertakan hashtag di sini, hanya teks caption saja",
   "hashtags": ["hashtag1", "hashtag2", ...],
   "first_comment": "opsional: teks untuk komentar pertama"
 }
+
+PENTING: Jangan pernah menulis hashtag di dalam field "caption". Hashtag hanya di field "hashtags".
