@@ -5,20 +5,23 @@ const SECRET = new TextEncoder().encode(process.env.DASHBOARD_JWT_SECRET || 'tul
 const COOKIE_NAME = 'tulehu_dashboard_token';
 
 export async function createToken(password) {
-  const { createClient } = await import('@supabase/supabase-js');
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY
-  );
-
-  const { data } = await supabase
-    .from('auth_settings')
-    .select('setting_value')
-    .eq('setting_key', 'dashboard_password')
-    .single();
-
-  if (!data || data.setting_value !== password) {
-    return null;
+  // 1. Cek env var dulu
+  const envPassword = process.env.DASHBOARD_PASSWORD;
+  if (envPassword) {
+    if (envPassword !== password) return null;
+  } else {
+    // 2. Fallback ke database
+    const { createClient } = await import('@supabase/supabase-js');
+    const supabase = createClient(
+      process.env.SUPABASE_URL,
+      process.env.SUPABASE_SERVICE_ROLE_KEY
+    );
+    const { data } = await supabase
+      .from('auth_settings')
+      .select('setting_value')
+      .eq('setting_key', 'dashboard_password')
+      .single();
+    if (!data || data.setting_value !== password) return null;
   }
 
   const token = await new SignJWT({ role: 'admin' })
