@@ -7,7 +7,7 @@ export async function POST(request, { params }) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const { id } = await params;
+    const { id } = params;
     const { scheduledAt } = await request.json();
 
     if (!scheduledAt) {

@@ -7,7 +7,7 @@ export async function GET(request, { params }) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const { id } = await params;
+    const { id } = params;
     const slot = await getSlotDetail(id);
     if (!slot) {
       return NextResponse.json({ error: 'Slot not found' }, { status: 404 });

@@ -7,7 +7,7 @@ export async function POST(request, { params }) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const { id } = await params;
+    const { id } = params;
     const result = await generateCaptionForSlot(id);
     return NextResponse.json(result);
   } catch (error) {
@@ -20,7 +20,7 @@ export async function PUT(request, { params }) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const { id } = await params;
+    const { id } = params;
     const { caption, hashtags } = await request.json();
     await updateCaption(id, caption, hashtags);
     return NextResponse.json({ success: true });

@@ -7,7 +7,7 @@ export async function POST(request, { params }) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const { id } = await params;
+    const { id } = params;
     const ideas = await generateIdeaForSlot(id);
     return NextResponse.json({ ideas });
   } catch (error) {
@@ -20,7 +20,7 @@ export async function PUT(request, { params }) {
   if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   try {
-    const { id } = await params;
+    const { id } = params;
     const { selectedIndex } = await request.json();
     await selectIdea(id, selectedIndex);
     return NextResponse.json({ success: true });
