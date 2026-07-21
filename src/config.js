@@ -48,10 +48,7 @@ const envSchema = z.object({
   MAX_RECHECKS: z.coerce.number().min(1).max(10).default(4),
   DAILY_PUBLISH_CRON: z.string().default('0 9 * * *'),
   WEEKLY_ANALYSIS_CRON: z.string().default('0 20 * * 0'),
-  AUTO_CONFIRM_TIMEOUT_MINUTES: z.coerce.number().min(10).default(120),
-
-  // Auto-mode: full_auto = skip all gates, semi_auto = timeout-based fallback
-  AUTO_MODE: z.enum(['full', 'semi', 'off']).default('semi'),
+  PUBLISH_POLL_INTERVAL_MINUTES: z.coerce.number().min(1).default(5),
 });
 
 const parsed = envSchema.safeParse(process.env);
@@ -120,23 +117,18 @@ export const agentProviders = {
   ],
 };
 
-// Pipeline statuses
+// Pipeline statuses (v2.0 — human-driven dashboard)
 export const PIPELINE_STATUS = {
-  IDEA: 'idea',
-  SCRIPT_DRAFTED: 'script_drafted',
-  AWAITING_SCRIPT_APPROVAL: 'awaiting_script_approval',
-  SCRIPT_APPROVED: 'script_approved',
-  AWAITING_ASSET: 'awaiting_asset',
-  GENERATING_ASSET: 'generating_asset',
-  AWAITING_FINAL_APPROVAL: 'awaiting_final_approval',
-  APPROVED: 'approved',
+  DRAFT: 'draft',
+  IDEA_READY: 'idea_ready',
+  SCRIPT_READY: 'script_ready',
+  VISUAL_UPLOADED: 'visual_uploaded',
+  CAPTION_READY: 'caption_ready',
+  SCHEDULED: 'scheduled',
   PUBLISHING: 'publishing',
   PUBLISHED: 'published',
   FAILED: 'failed',
 };
-
-// Approval keywords
-export const APPROVAL_KEYWORDS = ['approve', 'ok', 'oke', 'lanjut', 'ya', 'posting', 'publish'];
 
 // Instagram API base
 export const IG_API_BASE = 'https://graph.facebook.com/v21.0';
