@@ -45,7 +45,7 @@ export async function runCaptionAgent(pipeline, scriptContent) {
     };
   }
 
-  const captionText = `${captionContent.caption}\n\n${captionContent.hashtags?.map(h => `#${h}`).join(' ') || ''}`;
+  const captionText = captionContent.caption || '';
 
   await updatePipelineStatus(pipeline.id, pipeline.status, {
     caption_content: captionText,

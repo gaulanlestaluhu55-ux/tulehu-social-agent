@@ -18,6 +18,7 @@ export default function SlotPage({ params }) {
   const [copiedField, setCopiedField] = useState(null);
   const [activeSlide, setActiveSlide] = useState(0);
   const [toast, setToast] = useState(null);
+  const [firstComment, setFirstComment] = useState('');
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -150,6 +151,7 @@ export default function SlotPage({ params }) {
     const data = await apiCall(`/api/slots/${id}/caption`, 'POST', null, 'caption');
     setEditCaption(data.caption || '');
     setEditHashtags((data.hashtags || []).join(', '));
+    setFirstComment(data.first_comment || '');
     showToast('Caption berhasil di-generate!');
     loadSlot();
   };
@@ -512,6 +514,11 @@ export default function SlotPage({ params }) {
         <div>
           <textarea className="input" value={editCaption} onChange={(e) => setEditCaption(e.target.value)} style={{ minHeight: '120px' }} />
           <input className="input" style={{ marginTop: '0.5rem' }} placeholder="Hashtags (comma separated)" value={editHashtags} onChange={(e) => setEditHashtags(e.target.value)} />
+          {firstComment && (
+            <div style={{ marginTop: '0.5rem', padding: '0.5rem', background: 'var(--card)', borderRadius: '6px', fontSize: '0.8rem', color: 'var(--muted)' }}>
+              💬 Komentar pertama: {firstComment}
+            </div>
+          )}
         </div>
       </div>
 
