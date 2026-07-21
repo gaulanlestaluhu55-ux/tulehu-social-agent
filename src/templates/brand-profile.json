@@ -1,0 +1,62 @@
+{
+  "brand": {
+    "name": "Tulehu Inkline",
+    "type": "Custom T-shirt Printing Service",
+    "location": "Tulehu, Maluku, Indonesia",
+    "positioning": "Jasa sablon kaos custom, bukan brand clothing"
+  },
+  "tone": {
+    "voice": "Friendly",
+    "language": "Bahasa Indonesia informal",
+    "style": "Santai, langsung ke inti, pakai 'gue' dan 'lo'",
+    "avoid": ["kak", "brother", "sobat", "teman-teman", "halo semua"],
+    "max_sentences": 3
+  },
+  "visual": {
+    "primary_color": "#0B1220",
+    "secondary_color": "#1E3A5F",
+    "accent_color": "#F59E0B",
+    "fonts": ["Inter", "Poppins"],
+    "style": "clean, modern, minimalist",
+    "photography": {
+      "lighting": "natural or soft studio",
+      "composition": "center or rule of thirds",
+      "aspect_ratio": "4:5",
+      "background": "clean, uncluttered"
+    }
+  },
+  "content": {
+    "pillars": {
+      "edu": "Tips/edukasi sablon",
+      "product": "Showcase produk custom",
+      "bts": "Behind the scenes produksi",
+      "promo": "Promo dan quote grafis",
+      "testimonial": "Review dan testimoni customer",
+      "interactive": "Q&A, polling, challenge"
+    },
+    "cta_primary": "Chat WA di bio",
+    "cta_engagement": "Komentar di bawah",
+    "cta_share": "Share ke teman yang butuh",
+    "hashtag_prefix": "#TulehuInkline"
+  },
+  "publishing": {
+    "platforms": ["instagram", "facebook", "threads", "tiktok"],
+    "schedule": {
+      "daily_time": "09:00",
+      "timezone": "Asia/Jayapura",
+      "weekly_analysis_day": "sunday",
+      "weekly_analysis_time": "20:00"
+    },
+    "auto_modes": {
+      "full_auto": ["edu"],
+      "semi_auto": ["promo", "interactive"],
+      "manual": ["product", "bts", "testimonial"]
+    }
+  },
+  "rules": {
+    "never_fabricate": ["prices", "promos", "stats", "customer names"],
+    "never_use_ai_as_real": true,
+    "never_add_logo_to_customer_design": true,
+    "always_disclose_ai": true
+  }
+}

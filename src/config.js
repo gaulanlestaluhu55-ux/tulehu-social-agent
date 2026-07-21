@@ -103,6 +103,21 @@ export const agentProviders = {
     { name: 'openrouter', model: 'meta-llama/llama-3.1-70b-instruct' },
     { name: 'groq', model: 'llama-3.3-70b-versatile' },
   ],
+  campaign: [
+    { name: 'gemini', model: config.GEMINI_MODEL },
+    { name: 'openrouter', model: 'meta-llama/llama-3.1-70b-instruct' },
+    { name: 'groq', model: 'llama-3.3-70b-versatile' },
+  ],
+  image_brief: [
+    { name: 'gemini', model: config.GEMINI_MODEL },
+    { name: 'openrouter', model: 'meta-llama/llama-3.1-70b-instruct' },
+    { name: 'groq', model: 'llama-3.3-70b-versatile' },
+  ],
+  prompt_optimizer: [
+    { name: 'gemini', model: config.GEMINI_MODEL },
+    { name: 'openrouter', model: 'meta-llama/llama-3.1-70b-instruct' },
+    { name: 'groq', model: 'llama-3.3-70b-versatile' },
+  ],
 };
 
 // Pipeline statuses

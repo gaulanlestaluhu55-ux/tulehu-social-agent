@@ -30,7 +30,7 @@ async function generateWithCloudflare(prompt) {
   return Buffer.from(response.data);
 }
 
-export async function runImageAgent(pipeline) {
+export async function runImageAgent(pipeline, optimizedPrompt = null) {
   console.log('[Image Agent] Menyiapkan gambar...');
 
   if (pipeline.needs_real_photo) {
@@ -40,7 +40,9 @@ export async function runImageAgent(pipeline) {
   }
 
   await updatePipelineStatus(pipeline.id, PIPELINE_STATUS.GENERATING_ASSET);
-  const visualPrompt = pipeline.script_content?.visual_notes || pipeline.idea_content?.description || 'Custom t-shirt design, Indonesian context';
+  
+  // Use optimized prompt if provided, otherwise fallback to visual_notes
+  const visualPrompt = optimizedPrompt || pipeline.script_content?.visual_notes || pipeline.idea_content?.description || 'Custom t-shirt design, Indonesian context';
 
   const startTime = Date.now();
   const imageBuffer = await withRetry(async () => {
