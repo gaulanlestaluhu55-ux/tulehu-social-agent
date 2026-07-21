@@ -37,7 +37,14 @@ export async function runCaptionAgent(pipeline, scriptContent) {
   let captionContent;
   try {
     const cleaned = result.content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-    captionContent = JSON.parse(cleaned);
+    const jsonStart = cleaned.indexOf('{');
+    const jsonEnd = cleaned.lastIndexOf('}');
+    const jsonStr = jsonStart !== -1 && jsonEnd !== -1 ? cleaned.substring(jsonStart, jsonEnd + 1) : cleaned;
+    captionContent = JSON.parse(jsonStr);
+    // Strip # prefix from hashtags if LLM includes them
+    if (captionContent.hashtags) {
+      captionContent.hashtags = captionContent.hashtags.map(h => h.replace(/^#/, ''));
+    }
   } catch (err) {
     captionContent = {
       caption: result.content.substring(0, 2200),
